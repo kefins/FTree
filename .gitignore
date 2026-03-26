@@ -1,0 +1,24 @@
+node_modules/
+dist/
+dist-electron/
+dist-release/
+release/
+
+# 日志文件
+*.log
+
+# 临时/运行时文件
+_server.pid
+.server-bundle.cjs
+_server.log
+build_electron.log
+
+# OS 文件
+.DS_Store
+Thumbs.db
+
+# TypeScript 编译缓存
+*.tsbuildinfo
+
+# 运行时数据目录
+data/

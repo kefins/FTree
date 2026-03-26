@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="40" fill="#2d8c5f"/>
+  <circle cx="128" cy="60" r="22" fill="#fff"/>
+  <circle cx="70" cy="140" r="18" fill="#fff" opacity="0.9"/>
+  <circle cx="186" cy="140" r="18" fill="#fff" opacity="0.9"/>
+  <circle cx="45" cy="210" r="14" fill="#fff" opacity="0.8"/>
+  <circle cx="95" cy="210" r="14" fill="#fff" opacity="0.8"/>
+  <circle cx="161" cy="210" r="14" fill="#fff" opacity="0.8"/>
+  <circle cx="211" cy="210" r="14" fill="#fff" opacity="0.8"/>
+  <line x1="128" y1="82" x2="70" y2="122" stroke="#fff" stroke-width="3" opacity="0.7"/>
+  <line x1="128" y1="82" x2="186" y2="122" stroke="#fff" stroke-width="3" opacity="0.7"/>
+  <line x1="70" y1="158" x2="45" y2="196" stroke="#fff" stroke-width="2.5" opacity="0.6"/>
+  <line x1="70" y1="158" x2="95" y2="196" stroke="#fff" stroke-width="2.5" opacity="0.6"/>
+  <line x1="186" y1="158" x2="161" y2="196" stroke="#fff" stroke-width="2.5" opacity="0.6"/>
+  <line x1="186" y1="158" x2="211" y2="196" stroke="#fff" stroke-width="2.5" opacity="0.6"/>
+</svg>

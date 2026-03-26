@@ -1,0 +1,305 @@
+/* 树形图容器 */
+.tree-container {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  background-color: #fafafa;
+  background-image: radial-gradient(circle, #e0e0e0 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.tree-container svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* 节点样式 */
+.tree-node {
+  cursor: pointer;
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.tree-node:hover {
+  filter: brightness(0.92);
+}
+
+.tree-node rect {
+  rx: 8;
+  ry: 8;
+  transition: all 0.2s ease;
+}
+
+.tree-node:hover rect {
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+}
+
+.node-name {
+  font-size: 13px;
+  font-weight: 600;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+/* 排行小字（姓名下方） */
+.node-order-label {
+  font-size: 10px;
+  font-weight: 400;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  letter-spacing: 0.5px;
+}
+
+/* 个人详细信息文本（节点内） */
+.node-detail-text {
+  font-size: 10px;
+  text-anchor: middle;
+  pointer-events: none;
+  letter-spacing: 0.3px;
+}
+
+/* 配偶详细信息文本（配偶框内） */
+.spouse-detail-text {
+  font-size: 10px;
+  text-anchor: middle;
+  pointer-events: none;
+  letter-spacing: 0.3px;
+}
+
+/* 配偶小框 */
+.spouse-link {
+  stroke: #9fb3c8;
+  stroke-width: 1.5;
+  stroke-dasharray: 3, 2;
+  pointer-events: none;
+}
+
+.spouse-box {
+  cursor: pointer;
+}
+
+.spouse-box:hover {
+  filter: brightness(0.94) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.12)) !important;
+}
+
+.spouse-label {
+  font-size: 9px;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.spouse-name {
+  font-size: 12px;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+/* 世代行标签 */
+.gen-label-bg {
+  pointer-events: none;
+}
+
+.gen-label-text {
+  pointer-events: none;
+}
+
+/* 连接线样式 */
+.tree-link {
+  fill: none;
+  stroke: #bcccdc;
+  stroke-width: 1.5;
+  stroke-opacity: 0.7;
+  transition: stroke 0.2s ease;
+}
+
+.tree-link:hover {
+  stroke: #627d98;
+  stroke-opacity: 1;
+}
+
+/* 搜索高亮 */
+.tree-node-highlight rect {
+  stroke: #faad14 !important;
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 0 8px rgba(250, 173, 20, 0.5)) !important;
+}
+
+.tree-node-highlight .node-name {
+  fill: #ad6800 !important;
+  font-weight: 700 !important;
+}
+
+/* 选中节点高亮（蓝色边框 + 强烈辉光 + 呼吸动画） */
+.tree-node-selected rect {
+  stroke: #1890ff !important;
+  stroke-width: 4px !important;
+  filter: drop-shadow(0 0 14px rgba(24, 144, 255, 0.7)) drop-shadow(0 0 4px rgba(24, 144, 255, 0.4)) !important;
+  animation: selectedPulse 2s ease-in-out infinite;
+}
+
+.tree-node-selected .node-name {
+  fill: #096dd9 !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+}
+
+@keyframes selectedPulse {
+  0%, 100% { filter: drop-shadow(0 0 14px rgba(24, 144, 255, 0.7)) drop-shadow(0 0 4px rgba(24, 144, 255, 0.4)); }
+  50% { filter: drop-shadow(0 0 20px rgba(24, 144, 255, 0.9)) drop-shadow(0 0 6px rgba(24, 144, 255, 0.6)); }
+}
+
+/* 祖先节点高亮（橙红色边框 + 强辉光） */
+.tree-node-ancestor rect {
+  stroke: #fa541c !important;
+  stroke-width: 3.5px !important;
+  filter: drop-shadow(0 0 10px rgba(250, 84, 28, 0.6)) drop-shadow(0 0 3px rgba(250, 84, 28, 0.3)) !important;
+}
+
+.tree-node-ancestor .node-name {
+  fill: #d4380d !important;
+  font-weight: 700 !important;
+}
+
+/* 祖先连接线高亮（橙红色 + 加粗） */
+.tree-link-ancestor {
+  stroke: #fa541c !important;
+  stroke-width: 3.5px !important;
+  stroke-opacity: 1 !important;
+  filter: drop-shadow(0 0 4px rgba(250, 84, 28, 0.5));
+}
+
+/* 有选中节点时，非关联节点和连线淡化 */
+.tree-node-dimmed {
+  opacity: 0.3 !important;
+  transition: opacity 0.3s ease !important;
+}
+
+.tree-link-dimmed {
+  opacity: 0.15 !important;
+  transition: opacity 0.3s ease !important;
+}
+
+/* 过继关系虚线（亲生父亲 → 过继子女） */
+.tree-link-adoption {
+  fill: none;
+  stroke: #e8833a;
+  stroke-width: 1.5;
+  stroke-dasharray: 6, 4;
+  stroke-opacity: 0.8;
+  pointer-events: none;
+}
+
+.tree-link-adoption:hover {
+  stroke-opacity: 1;
+}
+
+/* 过继标记（节点右上角小标签） */
+.node-adopted-badge {
+  fill: #e8833a;
+  stroke: none;
+}
+
+.node-adopted-text {
+  font-size: 10px;
+  font-weight: 600;
+  fill: #ffffff;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* 展开/折叠按钮 */
+.tree-expand-btn {
+  cursor: pointer;
+}
+
+.tree-expand-btn circle {
+  fill: #ffffff;
+  stroke: #9fb3c8;
+  stroke-width: 1.5;
+  transition: fill 0.2s ease, stroke 0.2s ease;
+}
+
+.tree-expand-btn:hover circle {
+  fill: #f0f4f8;
+  stroke: #627d98;
+}
+
+.tree-expand-btn text {
+  font-size: 14px;
+  font-weight: 700;
+  fill: #627d98;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* 工具栏 */
+.tree-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.tree-toolbar .ant-input-search {
+  max-width: 220px;
+}
+
+/* Tooltip */
+.tree-tooltip {
+  position: absolute;
+  padding: 8px 12px;
+  background: rgba(16, 42, 67, 0.9);
+  color: #fff;
+  border-radius: 6px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 20;
+  white-space: nowrap;
+  transform: translate(-50%, -100%);
+  margin-top: -8px;
+}
+
+.tree-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 4px;
+  border-style: solid;
+  border-color: rgba(16, 42, 67, 0.9) transparent transparent transparent;
+}
+
+/* 平滑过渡动画 */
+.tree-node,
+.tree-link {
+  transition: opacity 0.3s ease;
+}
+
+.tree-node.entering {
+  opacity: 0;
+  animation: nodeAppear 0.3s ease forwards;
+}
+
+@keyframes nodeAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
