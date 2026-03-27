@@ -75,6 +75,8 @@ interface HierarchyNode {
   _spouseAddress?: string;
   /** 子女备注（女性成员用） */
   _childrenNote?: string;
+  /** 字/号 */
+  _courtesy?: string;
 }
 
 const BASE_NODE_WIDTH = 120;
@@ -150,6 +152,7 @@ function filterByExpanded(
       _orderLabel: orderLabel,
       _isPlaceholder: isPlaceholder,
       // 填充详细信息
+      _courtesy: detail?.courtesy,
       _birthDate: detail?.birthDate,
       _deathDate: detail?.deathDate,
       _birthPlace: detail?.birthPlace,
@@ -641,7 +644,26 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         }
       });
 
-    // 排行小字（姓名下方）
+    // 字/号（姓名下方，非占位节点且有 courtesy 时显示）
+    nodeGroup
+      .filter((d) => !d.data._isPlaceholder && !!d.data._courtesy)
+      .append('text')
+      .attr('class', 'node-courtesy')
+      .attr('x', NODE_WIDTH / 2)
+      .attr('y', nameBaseY + 14)
+      .each(function (d) {
+        const c = getNodeColor(d.data.generation, d.data.gender);
+        d3.select(this)
+          .style('fill', c.text)
+          .style('opacity', '0.55')
+          .style('font-size', '10px')
+          .style('text-anchor', 'middle')
+          .style('dominant-baseline', 'central')
+          .style('pointer-events', 'none')
+          .text(`字 ${d.data._courtesy}`);
+      });
+
+    // 排行小字（字/号下方）
     nodeGroup
       .filter((d) => !!d.data._orderLabel)
       .append('text')
@@ -649,6 +671,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr('x', NODE_WIDTH / 2)
       .attr('y', nameBaseY + 18)
       .each(function (d) {
+        // 如果有 courtesy，排行标签需要往下移
+        const hasCourtesy = !!d.data._courtesy;
+        if (hasCourtesy) {
+          d3.select(this).attr('y', nameBaseY + 28);
+        }
         const c = getNodeColor(d.data.generation, d.data.gender);
         d3.select(this)
           .style('fill', c.text)

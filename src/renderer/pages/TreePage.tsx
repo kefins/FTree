@@ -89,11 +89,13 @@ const TreePage: React.FC = () => {
   /** 右键菜单打开时要进入的初始模式 */
   const [openDetailMode, setOpenDetailMode] = useState<'detail' | 'edit' | 'addChild' | null>(null);
 
-  // 当 showDetail 或 showSpouse 开启时，加载完整人员数据
+  // 加载完整人员详细数据（用于节点上的"字/号"显示、导出图片等）
+  // rawData 变化说明树数据已刷新，需要同步更新 personDetailMap
   useEffect(() => {
-    if (showDetail || showSpouse) {
-      api.data.export().then((persons) => {
+    if (rawData && rawData.length > 0) {
+      api.data.export().then((result) => {
         const map = new Map<string, Person>();
+        const persons = Array.isArray(result) ? result : result.persons || [];
         for (const p of persons) {
           map.set(p.id, p);
         }
@@ -102,7 +104,7 @@ const TreePage: React.FC = () => {
         console.error('加载人员详细数据失败:', err);
       });
     }
-  }, [showDetail, showSpouse]);
+  }, [rawData]);
 
   // 单击节点：仅做祖先链高亮选中，不打开编辑面板
   const handleNodeSelect = useCallback((id: string) => {
@@ -402,6 +404,8 @@ const TreePage: React.FC = () => {
         rawData={rawData}
         treeData={treeData}
         selectedId={selectedId}
+        personDetailMap={personDetailMap}
+        generationChars={generationChars}
       />
 
       <GenerationColorConfig

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Modal, Radio, Select, Button, Progress, Checkbox, message } from 'antd';
 import * as d3 from 'd3';
 import { api } from '../api/bridge';
-import type { PersonIndex, TreeNode } from '../types/person';
+import type { PersonIndex, TreeNode, Person } from '../types/person';
 import {
   getGenerationColors,
   getGenderedColor,
@@ -21,6 +21,10 @@ interface ExportDialogProps {
   treeData?: TreeNode[];
   /** 当前选中的节点 ID（用于默认选择导出目标） */
   selectedId?: string | null;
+  /** 所有人员详细数据的映射（用于获取字/号等完整信息） */
+  personDetailMap?: Map<string, Person>;
+  /** 辈分字映射：世数 → 辈分字 */
+  generationChars?: Record<number, string>;
 }
 
 // ======== 节点尺寸常量（与 FamilyTree.tsx 保持一致） ========
@@ -83,6 +87,7 @@ interface LineageNode {
   gender: 'male' | 'female';
   generation: number;
   spouseName?: string;
+  courtesy?: string;
   children?: LineageNode[];
 }
 
@@ -93,6 +98,7 @@ interface LineageNode {
 function buildLineageTree(
   targetId: string,
   rawData: PersonIndex[],
+  personDetailMap?: Map<string, Person>,
 ): LineageNode | null {
   const personMap = new Map<string, PersonIndex>();
   for (const p of rawData) {
@@ -126,12 +132,14 @@ function buildLineageTree(
   // 递归构建树节点
   function buildNode(p: PersonIndex): LineageNode {
     const children = childrenMap.get(p.id) || [];
+    const detail = personDetailMap?.get(p.id);
     return {
       id: p.id,
       name: p.name,
       gender: p.gender,
       generation: p.generation,
       spouseName: p.spouseName,
+      courtesy: detail?.courtesy,
       children: children.length > 0 ? children.map(buildNode) : undefined,
     };
   }
@@ -163,6 +171,7 @@ function renderLineageSvg(
   lineageRoot: LineageNode,
   targetId: string,
   showSpouse = false,
+  generationChars: Record<number, string> = {},
 ): SVGSVGElement {
   const PADDING = 40;
 
@@ -363,6 +372,25 @@ function renderLineageSvg(
           .text(displayName);
       });
 
+    // 字/号（姓名下方，有 courtesy 时显示）
+    nodeGroup
+      .filter((d) => !!d.data.courtesy)
+      .append('text')
+      .attr('class', 'node-courtesy')
+      .attr('x', NODE_WIDTH / 2)
+      .attr('y', NODE_HEIGHT / 2 + 6)
+      .style('text-anchor', 'middle')
+      .style('dominant-baseline', 'central')
+      .style('font-size', '10px')
+      .style('pointer-events', 'none')
+      .each(function (d) {
+        const c = getNodeColor(d.data.generation, d.data.gender);
+        d3.select(this)
+          .style('fill', c.text)
+          .style('opacity', '0.55')
+          .text(`字 ${d.data.courtesy}`);
+      });
+
     // 世数小字
     nodeGroup
       .append('text')
@@ -374,6 +402,11 @@ function renderLineageSvg(
       .style('opacity', '0.55')
       .each(function (d) {
         const c = getNodeColor(d.data.generation, d.data.gender);
+        // 有字号时世数往下移
+        const hasCourtesy = !!d.data.courtesy;
+        if (hasCourtesy) {
+          d3.select(this).attr('y', NODE_HEIGHT / 2 + 20);
+        }
         d3.select(this)
           .style('fill', c.text)
           .text(`第${d.data.generation}世`);
@@ -393,12 +426,15 @@ function renderLineageSvg(
 
     for (const [gen, yPos] of generationYMap.entries()) {
       const c = getColor(gen);
+      const genChar = generationChars[gen];
+      const labelText = genChar ? `${gen}世·${genChar}` : `${gen}世`;
+      const labelWidth = genChar ? 64 : 48;
 
       g.append('rect')
         .attr('class', 'gen-label-bg')
-        .attr('x', labelX - 24)
+        .attr('x', labelX - labelWidth / 2)
         .attr('y', yPos - 12)
-        .attr('width', 48)
+        .attr('width', labelWidth)
         .attr('height', 24)
         .attr('rx', 12)
         .attr('ry', 12)
@@ -416,7 +452,7 @@ function renderLineageSvg(
         .style('text-anchor', 'middle')
         .style('dominant-baseline', 'central')
         .style('pointer-events', 'none')
-        .text(`${gen}世`);
+        .text(labelText);
     }
 
     // 配偶小框（仅在 showSpouse 模式下渲染）
@@ -563,6 +599,8 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
   rawData = [],
   treeData = [],
   selectedId,
+  personDetailMap,
+  generationChars = {},
 }) => {
   const [format, setFormat] = useState<'svg' | 'png'>('png');
   const [scale, setScale] = useState(2);
@@ -608,7 +646,7 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
         // ====== 直系血脉模式：从 rawData 独立构建子树并渲染 ======
         setProgress(15);
 
-        const lineageRoot = buildLineageTree(targetPersonId, rawData);
+        const lineageRoot = buildLineageTree(targetPersonId, rawData, personDetailMap);
         if (!lineageRoot) {
           message.error('未找到目标人物数据');
           setExporting(false);
@@ -619,7 +657,7 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
         setProgress(25);
 
         // 独立渲染 SVG（已包含背景、样式、正确的 viewBox）
-        clonedSvg = renderLineageSvg(lineageRoot, targetPersonId, exportSpouse);
+        clonedSvg = renderLineageSvg(lineageRoot, targetPersonId, exportSpouse, generationChars);
 
         // 从 viewBox 解析 BBox
         const vb = clonedSvg.getAttribute('viewBox')?.split(/\s+/).map(Number) || [0, 0, 800, 600];
