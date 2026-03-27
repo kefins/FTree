@@ -544,10 +544,10 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
                 <Descriptions.Item label="出生日期">{person.birthDate}</Descriptions.Item>
               )}
               {person.deathDate && (
-                <Descriptions.Item label="去世日期">{person.deathDate}</Descriptions.Item>
+                <Descriptions.Item label="逝世日期">{person.deathDate}</Descriptions.Item>
               )}
               {person.birthPlace && (
-                <Descriptions.Item label="出生地">{person.birthPlace}</Descriptions.Item>
+                <Descriptions.Item label="籍贯">{person.birthPlace}</Descriptions.Item>
               )}
               {person.occupation && (
                 <Descriptions.Item label="职业">{person.occupation}</Descriptions.Item>
@@ -556,7 +556,7 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
                 <Descriptions.Item label="联系电话">{person.phone}</Descriptions.Item>
               )}
               {person.address && (
-                <Descriptions.Item label="联系地址">{person.address}</Descriptions.Item>
+                <Descriptions.Item label="现住址">{person.address}</Descriptions.Item>
               )}
             </Descriptions>
             {!person.birthDate && !person.deathDate && !person.birthPlace && !person.occupation && !person.phone && !person.address && (
@@ -582,10 +582,10 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
                   <Descriptions.Item label="出生日期">{person.spouseBirthDate}</Descriptions.Item>
                 )}
                 {person.spouseDeathDate && (
-                  <Descriptions.Item label="去世日期">{person.spouseDeathDate}</Descriptions.Item>
+                  <Descriptions.Item label="逝世日期">{person.spouseDeathDate}</Descriptions.Item>
                 )}
                 {person.spouseBirthPlace && (
-                  <Descriptions.Item label="老家住址">{person.spouseBirthPlace}</Descriptions.Item>
+                  <Descriptions.Item label="籍贯">{person.spouseBirthPlace}</Descriptions.Item>
                 )}
                 {person.spouseOccupation && (
                   <Descriptions.Item label="职业">{person.spouseOccupation}</Descriptions.Item>
@@ -594,7 +594,7 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
                   <Descriptions.Item label="联系电话">{person.spousePhone}</Descriptions.Item>
                 )}
                 {person.spouseAddress && (
-                  <Descriptions.Item label="联系地址">{person.spouseAddress}</Descriptions.Item>
+                  <Descriptions.Item label="现住址">{person.spouseAddress}</Descriptions.Item>
                 )}
               </Descriptions>
             ) : (
@@ -698,7 +698,7 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
         <Form.Item label="父亲" name="parentId">
           <TreeSelect
             treeData={treeSelectData}
-            placeholder="选择父节点（留空表示根节点）"
+            placeholder="选择父亲（留空表示根节点）"
             allowClear
             showSearch
             treeDefaultExpandAll
@@ -737,12 +737,12 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
               <Input placeholder="如：1950-01-01 或 庚寅年" />
             </Form.Item>
 
-            <Form.Item label="去世日期" name="deathDate">
+            <Form.Item label="逝世日期" name="deathDate">
               <Input placeholder="如：2020-12-31 或 留空" />
             </Form.Item>
 
-            <Form.Item label="出生地" name="birthPlace">
-              <Input placeholder="出生地" maxLength={200} />
+            <Form.Item label="籍贯" name="birthPlace">
+              <Input placeholder="籍贯" maxLength={200} />
             </Form.Item>
 
             <Form.Item label="职业" name="occupation">
@@ -753,8 +753,8 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
               <Input placeholder="联系电话" maxLength={20} />
             </Form.Item>
 
-            <Form.Item label="联系地址" name="address">
-              <Input placeholder="联系地址" maxLength={300} />
+            <Form.Item label="现住址" name="address">
+              <Input placeholder="现住址" maxLength={300} />
             </Form.Item>
           </div>
 
@@ -772,12 +772,12 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
               <Input placeholder="配偶出生日期" />
             </Form.Item>
 
-            <Form.Item label="去世日期" name="spouseDeathDate">
-              <Input placeholder="配偶去世日期" />
+            <Form.Item label="逝世日期" name="spouseDeathDate">
+              <Input placeholder="配偶逝世日期" />
             </Form.Item>
 
-            <Form.Item label="老家住址" name="spouseBirthPlace">
-              <Input placeholder="配偶老家住址" maxLength={200} />
+            <Form.Item label="籍贯" name="spouseBirthPlace">
+              <Input placeholder="配偶籍贯" maxLength={200} />
             </Form.Item>
 
             <Form.Item label="职业" name="spouseOccupation">
@@ -788,8 +788,8 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
               <Input placeholder="配偶电话" maxLength={20} />
             </Form.Item>
 
-            <Form.Item label="联系地址" name="spouseAddress">
-              <Input placeholder="配偶联系地址" maxLength={300} />
+            <Form.Item label="现住址" name="spouseAddress">
+              <Input placeholder="配偶现住址" maxLength={300} />
             </Form.Item>
           </div>
         </div>
@@ -886,12 +886,12 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
               <Input placeholder="如：1950-01-01 或 庚寅年" />
             </Form.Item>
 
-            <Form.Item label="去世日期" name="deathDate">
+            <Form.Item label="逝世日期" name="deathDate">
               <Input placeholder="如：2020-12-31 或 留空" />
             </Form.Item>
 
-            <Form.Item label="出生地" name="birthPlace">
-              <Input placeholder="出生地" maxLength={200} />
+            <Form.Item label="籍贯" name="birthPlace">
+              <Input placeholder="籍贯" maxLength={200} />
             </Form.Item>
 
             <Form.Item label="职业" name="occupation">
@@ -902,8 +902,8 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
               <Input placeholder="联系电话" maxLength={20} />
             </Form.Item>
 
-            <Form.Item label="联系地址" name="address">
-              <Input placeholder="联系地址" maxLength={300} />
+            <Form.Item label="现住址" name="address">
+              <Input placeholder="现住址" maxLength={300} />
             </Form.Item>
           </div>
 
@@ -921,12 +921,12 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
               <Input placeholder="配偶出生日期" />
             </Form.Item>
 
-            <Form.Item label="去世日期" name="spouseDeathDate">
-              <Input placeholder="配偶去世日期" />
+            <Form.Item label="逝世日期" name="spouseDeathDate">
+              <Input placeholder="配偶逝世日期" />
             </Form.Item>
 
-            <Form.Item label="老家住址" name="spouseBirthPlace">
-              <Input placeholder="配偶老家住址" maxLength={200} />
+            <Form.Item label="籍贯" name="spouseBirthPlace">
+              <Input placeholder="配偶籍贯" maxLength={200} />
             </Form.Item>
 
             <Form.Item label="职业" name="spouseOccupation">
@@ -937,8 +937,8 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
               <Input placeholder="配偶电话" maxLength={20} />
             </Form.Item>
 
-            <Form.Item label="联系地址" name="spouseAddress">
-              <Input placeholder="配偶联系地址" maxLength={300} />
+            <Form.Item label="现住址" name="spouseAddress">
+              <Input placeholder="配偶现住址" maxLength={300} />
             </Form.Item>
           </div>
         </div>

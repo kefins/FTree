@@ -145,7 +145,7 @@ const PersonForm: React.FC<PersonFormProps> = ({
     };
   }, [selectedParentId, selectedGender, rawData, initialValues?.id, form]);
 
-  /** 选择父节点后自动更新世数为 父世数 + 1，并自动推荐 sortOrder */
+  /** 选择父亲后自动更新世数为 父世数 + 1，并自动推荐 sortOrder */
   const handleParentChange = (parentId: string | undefined) => {
     setSelectedParentId(parentId || undefined);
     if (!parentId) return;
@@ -227,10 +227,10 @@ const PersonForm: React.FC<PersonFormProps> = ({
         <InputNumber min={1} max={100} style={{ width: '100%' }} placeholder="第几世" />
       </Form.Item>
 
-      <Form.Item label="父节点" name="parentId">
+      <Form.Item label="父亲" name="parentId">
         <TreeSelect
           treeData={treeSelectData}
-          placeholder="选择父节点（留空表示根节点）"
+          placeholder="选择父亲（留空表示根节点）"
           allowClear
           showSearch
           treeDefaultExpandAll
@@ -284,7 +284,7 @@ const PersonForm: React.FC<PersonFormProps> = ({
           }}
         />
         <span style={{ marginLeft: 8, color: '#666', fontSize: 12 }}>
-          开启后可设置亲生父亲（上方"父节点"为养父/过继父亲）
+          开启后可设置亲生父亲（上方"父亲"为养父/过继父亲）
         </span>
       </Form.Item>
 
@@ -292,7 +292,7 @@ const PersonForm: React.FC<PersonFormProps> = ({
         <>
           <Alert
             message="过继说明"
-            description={'上方「父节点」为养父（族谱中的直系关系，实线连接），下方选择亲生父亲（虚线连接表示血缘关系）。'}
+            description={'上方「父亲」为养父（族谱中的直系关系，实线连接），下方选择亲生父亲（虚线连接表示血缘关系）。'}
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
@@ -337,12 +337,12 @@ const PersonForm: React.FC<PersonFormProps> = ({
                     <Input placeholder="如：1950-01-01 或 庚寅年" />
                   </Form.Item>
 
-                  <Form.Item label="去世日期" name="deathDate">
+                  <Form.Item label="逝世日期" name="deathDate">
                     <Input placeholder="如：2020-12-31 或 留空" />
                   </Form.Item>
 
-                  <Form.Item label="出生地" name="birthPlace">
-                    <Input placeholder="出生地" maxLength={200} />
+                  <Form.Item label="籍贯" name="birthPlace">
+                    <Input placeholder="籍贯" maxLength={200} />
                   </Form.Item>
 
                   <Form.Item label="职业" name="occupation">
@@ -353,8 +353,8 @@ const PersonForm: React.FC<PersonFormProps> = ({
                     <Input placeholder="联系电话" maxLength={20} />
                   </Form.Item>
 
-                  <Form.Item label="联系地址" name="address">
-                    <Input placeholder="联系地址" maxLength={300} />
+                  <Form.Item label="现住址" name="address">
+                    <Input placeholder="现住址" maxLength={300} />
                   </Form.Item>
 
                   <Form.Item label="个人简介" name="bio">
@@ -389,12 +389,12 @@ const PersonForm: React.FC<PersonFormProps> = ({
                     <Input placeholder="配偶出生日期" />
                   </Form.Item>
 
-                  <Form.Item label="去世日期" name="spouseDeathDate">
-                    <Input placeholder="配偶去世日期" />
+                  <Form.Item label="逝世日期" name="spouseDeathDate">
+                    <Input placeholder="配偶逝世日期" />
                   </Form.Item>
 
-                  <Form.Item label="老家住址" name="spouseBirthPlace">
-                    <Input placeholder="配偶老家住址" maxLength={200} />
+                  <Form.Item label="籍贯" name="spouseBirthPlace">
+                    <Input placeholder="配偶籍贯" maxLength={200} />
                   </Form.Item>
 
                   <Form.Item label="职业" name="spouseOccupation">
@@ -405,8 +405,8 @@ const PersonForm: React.FC<PersonFormProps> = ({
                     <Input placeholder="配偶电话" maxLength={20} />
                   </Form.Item>
 
-                  <Form.Item label="联系地址" name="spouseAddress">
-                    <Input placeholder="配偶联系地址" maxLength={300} />
+                  <Form.Item label="现住址" name="spouseAddress">
+                    <Input placeholder="配偶现住址" maxLength={300} />
                   </Form.Item>
                 </div>
               </div>

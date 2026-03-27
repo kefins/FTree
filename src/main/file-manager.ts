@@ -295,6 +295,12 @@ export function createBackup(key: Buffer): string {
     fs.copyFileSync(metaSrc, path.join(backupDir, FILES.FAMILY_META_ENC));
   }
 
+  // 复制用户数据
+  const usersSrc = path.join(dataDir, FILES.USERS_ENC);
+  if (fs.existsSync(usersSrc)) {
+    fs.copyFileSync(usersSrc, path.join(backupDir, FILES.USERS_ENC));
+  }
+
   // 复制所有分片文件
   const detailsSrc = path.join(dataDir, FILES.DETAILS_DIR);
   if (fs.existsSync(detailsSrc)) {

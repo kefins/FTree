@@ -8,16 +8,64 @@ import type {
   ListQuery,
   GenerationCharConfig,
   ExportDataResult,
+  UserInfo,
+  CreateUserDTO,
+  UpdateUserDTO,
+  AuthCheckResult,
+  LoginResult,
+  SetupResult,
 } from '../types/person';
 
 const BASE_URL = `http://localhost:${DEFAULT_PORT}/api`;
 
+/** HTTP 模式下保存的 token */
+let authToken: string | null = null;
+
+/** 保存 token 到 sessionStorage */
+function saveToken(token: string): void {
+  authToken = token;
+  try {
+    sessionStorage.setItem('ftree_token', token);
+  } catch {
+    // ignore
+  }
+}
+
+/** 从 sessionStorage 恢复 token */
+function loadToken(): string | null {
+  if (authToken) return authToken;
+  try {
+    authToken = sessionStorage.getItem('ftree_token');
+  } catch {
+    // ignore
+  }
+  return authToken;
+}
+
+/** 清除 token */
+function clearToken(): void {
+  authToken = null;
+  try {
+    sessionStorage.removeItem('ftree_token');
+  } catch {
+    // ignore
+  }
+}
+
 /** 发起 HTTP 请求并自动解包 { success, data, error } 响应格式 */
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  // 附加 token
+  const token = loadToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     ...options,
   });
 
@@ -51,26 +99,80 @@ function buildQueryString(query?: Record<string, unknown>): string {
 
 const httpApi: FTreeAPI = {
   auth: {
-    async setup(password: string): Promise<void> {
-      await request('/auth/setup', {
+    async setup(username: string, password: string, displayName?: string): Promise<SetupResult> {
+      const result = await request<SetupResult>('/auth/setup', {
         method: 'POST',
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password, displayName }),
       });
+      if (result.token) {
+        saveToken(result.token);
+      }
+      return result;
     },
-    async login(password: string): Promise<boolean> {
+    async login(username: string, password: string): Promise<LoginResult> {
       try {
-        await request('/auth/login', {
+        const result = await request<LoginResult>('/auth/login', {
           method: 'POST',
-          body: JSON.stringify({ password }),
+          body: JSON.stringify({ username, password }),
         });
-        return true;
-      } catch {
-        return false;
+        if (result.token) {
+          saveToken(result.token);
+        }
+        return result;
+      } catch (e: any) {
+        return { success: false, error: e.message };
       }
     },
-    async check(): Promise<{ initialized: boolean; loggedIn: boolean }> {
-      const data = await request<{ initialized: boolean }>('/auth/check');
-      return { initialized: data.initialized, loggedIn: false };
+    async check(): Promise<AuthCheckResult> {
+      const data = await request<AuthCheckResult>('/auth/check');
+      return data;
+    },
+    async me(): Promise<UserInfo> {
+      return request('/auth/me');
+    },
+    async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+      await request('/auth/password', {
+        method: 'PUT',
+        body: JSON.stringify({ oldPassword, newPassword }),
+      });
+    },
+    async logout(): Promise<void> {
+      try {
+        await request('/auth/logout', { method: 'POST' });
+      } catch {
+        // ignore
+      }
+      clearToken();
+    },
+  },
+
+  users: {
+    async list(): Promise<UserInfo[]> {
+      return request('/users');
+    },
+    async create(data: CreateUserDTO): Promise<UserInfo> {
+      return request('/users', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    async update(id: string, data: UpdateUserDTO): Promise<UserInfo> {
+      return request(`/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    async delete(id: string): Promise<void> {
+      await request(`/users/${id}`, { method: 'DELETE' });
+    },
+    async resetPassword(id: string, newPassword: string): Promise<void> {
+      await request(`/users/${id}/reset-password`, {
+        method: 'PUT',
+        body: JSON.stringify({ newPassword }),
+      });
+    },
+    async toggle(id: string): Promise<UserInfo> {
+      return request(`/users/${id}/toggle`, { method: 'PUT' });
     },
   },
 
@@ -174,22 +276,69 @@ const httpApi: FTreeAPI = {
   },
 };
 
-// Electron IPC 模式包装器：解包 { success, data, error } 格式
+// Electron IPC 模式包装器
 function wrapIpcApi(ipcApi: any): FTreeAPI {
   return {
     auth: {
-      async setup(password: string) {
-        const res = await ipcApi.auth.setup(password);
+      async setup(username: string, password: string, displayName?: string) {
+        const res = await ipcApi.auth.setup(username, password, displayName);
         if (res?.success === false) throw new Error(res.error);
+        return res;
       },
-      async login(password: string) {
-        const res = await ipcApi.auth.login(password);
-        return res?.success !== false;
+      async login(username: string, password: string) {
+        const res = await ipcApi.auth.login(username, password);
+        return res;
       },
       async check() {
         const res = await ipcApi.auth.check();
         const data = res?.data || res;
-        return { initialized: data?.initialized ?? false, loggedIn: data?.loggedIn ?? false };
+        return data;
+      },
+      async me() {
+        const res = await ipcApi.auth.me();
+        if (res?.success === false) throw new Error(res.error);
+        return res?.data || res;
+      },
+      async changePassword(oldPassword: string, newPassword: string) {
+        const res = await ipcApi.auth.changePassword(oldPassword, newPassword);
+        if (res?.success === false) throw new Error(res.error);
+      },
+      async logout() {
+        await ipcApi.auth.logout();
+      },
+      async resetData() {
+        const res = await ipcApi.auth.resetData();
+        return res;
+      },
+    },
+    users: {
+      async list() {
+        const res = await ipcApi.users.list();
+        if (res?.success === false) throw new Error(res.error);
+        return res?.data || res;
+      },
+      async create(data: CreateUserDTO) {
+        const res = await ipcApi.users.create(data);
+        if (res?.success === false) throw new Error(res.error);
+        return res?.data || res;
+      },
+      async update(id: string, data: UpdateUserDTO) {
+        const res = await ipcApi.users.update(id, data);
+        if (res?.success === false) throw new Error(res.error);
+        return res?.data || res;
+      },
+      async delete(id: string) {
+        const res = await ipcApi.users.delete(id);
+        if (res?.success === false) throw new Error(res.error);
+      },
+      async resetPassword(id: string, newPassword: string) {
+        const res = await ipcApi.users.resetPassword(id, newPassword);
+        if (res?.success === false) throw new Error(res.error);
+      },
+      async toggle(id: string) {
+        const res = await ipcApi.users.toggle(id);
+        if (res?.success === false) throw new Error(res.error);
+        return res?.data || res;
       },
     },
     person: {

@@ -18,11 +18,13 @@ import GenerationColorConfig from '../components/GenerationColorConfig';
 import PrintDialog from '../components/PrintDialog';
 import { useTreeData } from '../hooks/useTreeData';
 import { usePersonCRUD } from '../hooks/usePersonCRUD';
+import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/bridge';
 import type { Person } from '../types/person';
 import { loadGenerationChars } from '../utils/generationChars';
 
 const TreePage: React.FC = () => {
+  const { permissions } = useAuth();
   const {
     treeData,
     rawData,
@@ -303,6 +305,7 @@ const TreePage: React.FC = () => {
             <EyeOutlined style={{ color: '#1677ff' }} />
             <span>查看详情</span>
           </div>
+          {permissions.canEdit && (
           <div
             style={{ padding: '7px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}
             className="context-menu-item"
@@ -318,7 +321,9 @@ const TreePage: React.FC = () => {
             <EditOutlined style={{ color: '#52c41a' }} />
             <span>编辑信息</span>
           </div>
+          )}
           <div style={{ height: 1, background: '#f0f0f0', margin: '4px 0' }} />
+          {permissions.canEdit && (
           <div
             style={{ padding: '7px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}
             className="context-menu-item"
@@ -334,6 +339,7 @@ const TreePage: React.FC = () => {
             <UserAddOutlined style={{ color: '#1677ff' }} />
             <span>添加子女</span>
           </div>
+          )}
           <div
             style={{ padding: '7px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}
             className="context-menu-item"
@@ -380,9 +386,9 @@ const TreePage: React.FC = () => {
         }}
         rawData={rawData}
         treeData={treeData}
-        onSave={handleSave}
-        onAddChild={handleAddChild}
-        onDelete={handleDelete}
+        onSave={permissions.canEdit ? handleSave : undefined}
+        onAddChild={permissions.canEdit ? handleAddChild : undefined}
+        onDelete={permissions.canDelete ? handleDelete : undefined}
         onRefresh={silentRefresh}
         onRefreshAndExpand={refreshAndExpand}
         initialMode={openDetailMode}

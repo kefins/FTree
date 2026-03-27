@@ -14,12 +14,19 @@ function createWindow(): void {
     height: 800,
     minWidth: 900,
     minHeight: 600,
+    show: false, // 先不显示，等最大化后再显示避免闪烁
     title: 'FTree 家谱管理',
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // 窗口准备好后最大化并显示，避免先显示小窗口再跳到最大化的闪烁
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.maximize();
+    mainWindow?.show();
   });
 
   if (isDev) {

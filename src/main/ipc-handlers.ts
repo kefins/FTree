@@ -1,10 +1,7 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import fs from 'fs';
 import {
-  isInitialized,
   isLoggedIn,
-  setupPassword,
-  initialize,
   createPerson,
   updatePerson,
   deletePerson,
@@ -19,6 +16,8 @@ import {
   clearAllData,
   getGenerationChars,
   saveGenerationChars,
+  loadIndex,
+  initEmptyIndex,
 } from './data-service';
 import {
   getConfiguredDataPath,
@@ -26,6 +25,26 @@ import {
   changeDataDir,
   resetDataDir,
 } from './file-manager';
+import {
+  isInitialized,
+  isV1Mode,
+  isV2Mode,
+  setupFirstUser,
+  login,
+  logout,
+  getCurrentSession,
+  getCurrentUser,
+  listUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  resetUserPassword,
+  changeOwnPassword,
+  toggleUser,
+  migrateV1ToV2,
+  syncBootstrapAfterMigration,
+  getAvailableUsernames,
+} from './user-service';
 
 /** 注册所有 IPC handlers */
 export function registerIPCHandlers(): void {
@@ -33,23 +52,221 @@ export function registerIPCHandlers(): void {
 
   ipcMain.handle('auth:check', async () => {
     try {
-      return { initialized: isInitialized(), loggedIn: isLoggedIn() };
+      const initialized = isInitialized();
+      const loggedIn = isLoggedIn();
+      const v2 = isV2Mode();
+      const usernames = v2 ? getAvailableUsernames() : [];
+      const session = getCurrentSession();
+      return {
+        initialized,
+        loggedIn,
+        v2,
+        usernames,
+        user: session
+          ? {
+              id: session.userId,
+              username: session.username,
+              displayName: session.displayName,
+              role: session.role,
+            }
+          : undefined,
+      };
     } catch (e: any) {
       throw new Error(e.message);
     }
   });
 
-  ipcMain.handle('auth:setup', async (_event, password: string) => {
+  ipcMain.handle('auth:setup', async (_event, username: string, password: string, displayName?: string) => {
     try {
-      setupPassword(password);
+      const session = setupFirstUser(username, password, displayName);
+      // 初始化空索引
+      initEmptyIndex();
+      return {
+        token: session.token,
+        user: {
+          id: session.userId,
+          username: session.username,
+          displayName: session.displayName,
+          role: session.role,
+        },
+      };
     } catch (e: any) {
       throw new Error(e.message);
     }
   });
 
-  ipcMain.handle('auth:login', async (_event, password: string) => {
+  ipcMain.handle('auth:login', async (_event, username: string, password: string) => {
     try {
-      return initialize(password);
+      console.log('[auth:login] attempting login for:', username || 'admin');
+      const result = login(username || 'admin', password);
+      console.log('[auth:login] login OK, needMigration:', result.needMigration);
+
+      // 加载索引
+      try {
+        loadIndex();
+        console.log('[auth:login] loadIndex OK');
+      } catch (indexErr: any) {
+        console.error('[auth:login] loadIndex failed:', indexErr.message);
+        // 索引加载失败不阻止登录，可能是空数据
+      }
+
+      // 如果需要 V1→V2 迁移
+      if (result.needMigration) {
+        try {
+          migrateV1ToV2(username || 'admin', password);
+          syncBootstrapAfterMigration();
+          console.log('[auth:login] V1→V2 migration OK');
+        } catch (migrateErr: any) {
+          console.error('[auth:login] migration failed:', migrateErr.message);
+        }
+      }
+
+      return {
+        success: true,
+        token: result.session.token,
+        user: {
+          id: result.session.userId,
+          username: result.session.username,
+          displayName: result.session.displayName,
+          role: result.session.role,
+        },
+        needMigration: result.needMigration,
+      };
+    } catch (e: any) {
+      console.error('[auth:login] login failed:', e.message);
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('auth:me', async () => {
+    try {
+      const user = getCurrentUser();
+      return user;
+    } catch (e: any) {
+      throw new Error(e.message);
+    }
+  });
+
+  ipcMain.handle('auth:changePassword', async (_event, oldPassword: string, newPassword: string) => {
+    try {
+      const session = getCurrentSession();
+      if (!session) throw new Error('未登录');
+      changeOwnPassword(session.userId, oldPassword, newPassword);
+    } catch (e: any) {
+      throw new Error(e.message);
+    }
+  });
+
+  ipcMain.handle('auth:logout', async () => {
+    try {
+      logout();
+    } catch (e: any) {
+      throw new Error(e.message);
+    }
+  });
+
+  ipcMain.handle('auth:resetData', async () => {
+    try {
+      const { getDataDir, ensureDataDir } = await import('./file-manager');
+      const path = await import('path');
+      const fsModule = await import('fs');
+      const dataDir = getDataDir();
+
+      // 创建备份目录
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupDir = path.default.join(dataDir, 'reset-backup_' + timestamp);
+      fsModule.default.mkdirSync(backupDir, { recursive: true });
+
+      // 备份所有现有文件（不包括 backups 目录和 reset-backup 目录）
+      const entries = fsModule.default.readdirSync(dataDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith('reset-backup_') || entry.name === 'backups') continue;
+        const src = path.default.join(dataDir, entry.name);
+        const dest = path.default.join(backupDir, entry.name);
+        if (entry.isDirectory()) {
+          // 递归复制
+          const copyDir = (s: string, d: string) => {
+            fsModule.default.mkdirSync(d, { recursive: true });
+            for (const e of fsModule.default.readdirSync(s, { withFileTypes: true })) {
+              if (e.isDirectory()) copyDir(path.default.join(s, e.name), path.default.join(d, e.name));
+              else fsModule.default.copyFileSync(path.default.join(s, e.name), path.default.join(d, e.name));
+            }
+          };
+          copyDir(src, dest);
+        } else {
+          fsModule.default.copyFileSync(src, dest);
+        }
+      }
+
+      // 删除 config.json、index.enc、users.enc、family_meta.enc、details 目录
+      const filesToDelete = ['config.json', 'index.enc', 'users.enc', 'family_meta.enc'];
+      for (const file of filesToDelete) {
+        const filePath = path.default.join(dataDir, file);
+        if (fsModule.default.existsSync(filePath)) {
+          fsModule.default.unlinkSync(filePath);
+        }
+      }
+      // 删除 details 目录下所有分片文件
+      const detailsDir = path.default.join(dataDir, 'details');
+      if (fsModule.default.existsSync(detailsDir)) {
+        for (const file of fsModule.default.readdirSync(detailsDir)) {
+          fsModule.default.unlinkSync(path.default.join(detailsDir, file));
+        }
+      }
+
+      console.log('[auth:resetData] data reset done, backup at:', backupDir);
+      return { success: true, backupDir };
+    } catch (e: any) {
+      console.error('[auth:resetData] error:', e.message);
+      return { success: false, error: e.message };
+    }
+  });
+
+  // ==================== 用户管理 ====================
+
+  ipcMain.handle('users:list', async () => {
+    try {
+      return listUsers();
+    } catch (e: any) {
+      throw new Error(e.message);
+    }
+  });
+
+  ipcMain.handle('users:create', async (_event, data: { username: string; displayName: string; password: string; role: string }) => {
+    try {
+      return createUser(data as any);
+    } catch (e: any) {
+      throw new Error(e.message);
+    }
+  });
+
+  ipcMain.handle('users:update', async (_event, id: string, data: { displayName?: string; role?: string }) => {
+    try {
+      return updateUser(id, data as any);
+    } catch (e: any) {
+      throw new Error(e.message);
+    }
+  });
+
+  ipcMain.handle('users:delete', async (_event, id: string) => {
+    try {
+      deleteUser(id);
+    } catch (e: any) {
+      throw new Error(e.message);
+    }
+  });
+
+  ipcMain.handle('users:resetPassword', async (_event, id: string, newPassword: string) => {
+    try {
+      resetUserPassword(id, newPassword);
+    } catch (e: any) {
+      throw new Error(e.message);
+    }
+  });
+
+  ipcMain.handle('users:toggle', async (_event, id: string) => {
+    try {
+      return toggleUser(id);
     } catch (e: any) {
       throw new Error(e.message);
     }

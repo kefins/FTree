@@ -9,15 +9,15 @@ export interface Person {
   spouseName?: string;
   /** 配偶出生日期 */
   spouseBirthDate?: string;
-  /** 配偶去世日期 */
+  /** 配偶逝世日期 */
   spouseDeathDate?: string;
-  /** 配偶出生地/老家 */
+  /** 配偶籍贯 */
   spouseBirthPlace?: string;
   /** 配偶职业 */
   spouseOccupation?: string;
   /** 配偶联系电话 */
   spousePhone?: string;
-  /** 配偶联系地址 */
+  /** 配偶现住址 */
   spouseAddress?: string;
   /** 子女备注（女性成员用，简要标注子女情况） */
   childrenNote?: string;
@@ -84,11 +84,112 @@ export interface ExportDataResult {
   generationChars?: GenerationCharConfig;
 }
 
+// ======================== 用户/权限类型 ========================
+
+/** 用户角色 */
+export type UserRole = 'admin' | 'editor' | 'viewer';
+
+/** 用户信息（前端展示用） */
+export interface UserInfo {
+  id: string;
+  username: string;
+  displayName: string;
+  role: UserRole;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt?: string;
+  disabled?: boolean;
+}
+
+/** 创建用户参数 */
+export interface CreateUserDTO {
+  username: string;
+  displayName: string;
+  password: string;
+  role: UserRole;
+}
+
+/** 更新用户参数 */
+export interface UpdateUserDTO {
+  displayName?: string;
+  role?: UserRole;
+}
+
+/** 认证检查结果 */
+export interface AuthCheckResult {
+  initialized: boolean;
+  loggedIn: boolean;
+  v2: boolean;
+  usernames: string[];
+  user?: {
+    id: string;
+    username: string;
+    displayName: string;
+    role: UserRole;
+  };
+}
+
+/** 登录结果 */
+export interface LoginResult {
+  success: boolean;
+  error?: string;
+  token?: string;
+  user?: {
+    id: string;
+    username: string;
+    displayName: string;
+    role: UserRole;
+  };
+  needMigration?: boolean;
+}
+
+/** 设置结果 */
+export interface SetupResult {
+  token: string;
+  user: {
+    id: string;
+    username: string;
+    displayName: string;
+    role: UserRole;
+  };
+}
+
+/** 权限定义 */
+export interface Permissions {
+  canEdit: boolean;
+  canDelete: boolean;
+  canManageUsers: boolean;
+  canManageData: boolean;
+  canManageSettings: boolean;
+}
+
+/** 根据角色获取权限 */
+export function getPermissions(role: UserRole): Permissions {
+  return {
+    canEdit: role === 'admin' || role === 'editor',
+    canDelete: role === 'admin',
+    canManageUsers: role === 'admin',
+    canManageData: role === 'admin',
+    canManageSettings: role === 'admin' || role === 'editor',
+  };
+}
+
 export interface FTreeAPI {
   auth: {
-    setup(password: string): Promise<void>;
-    login(password: string): Promise<boolean>;
-    check(): Promise<{ initialized: boolean; loggedIn: boolean }>;
+    setup(username: string, password: string, displayName?: string): Promise<SetupResult>;
+    login(username: string, password: string): Promise<LoginResult>;
+    check(): Promise<AuthCheckResult>;
+    me(): Promise<UserInfo>;
+    changePassword(oldPassword: string, newPassword: string): Promise<void>;
+    logout(): Promise<void>;
+  };
+  users: {
+    list(): Promise<UserInfo[]>;
+    create(data: CreateUserDTO): Promise<UserInfo>;
+    update(id: string, data: UpdateUserDTO): Promise<UserInfo>;
+    delete(id: string): Promise<void>;
+    resetPassword(id: string, newPassword: string): Promise<void>;
+    toggle(id: string): Promise<UserInfo>;
   };
   person: {
     create(data: CreatePersonDTO): Promise<Person>;

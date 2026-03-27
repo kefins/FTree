@@ -39,6 +39,13 @@ export const FILES = {
   INDEX: 'index.json',
   INDEX_ENC: 'index.enc',
   FAMILY_META_ENC: 'family_meta.enc',
+  USERS_ENC: 'users.enc',
   DETAILS_DIR: 'details',
   BACKUPS_DIR: 'backups',
 };
+
+/** 用户角色 */
+export type UserRole = 'admin' | 'editor' | 'viewer';
+
+/** 会话过期时间（毫秒）：24 小时 */
+export const SESSION_EXPIRE_MS = 24 * 60 * 60 * 1000;

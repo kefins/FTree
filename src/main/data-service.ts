@@ -1,24 +1,17 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
-  deriveKey,
-  hashPassword,
-  verifyPassword as verifyPwd,
-} from './crypto-service';
-import {
-  readConfig,
-  writeConfig,
   readIndex,
   writeIndex,
   readChunk,
   writeChunk,
   getChunkId,
-  ensureDataDir,
   clearChunks,
   readFamilyMeta,
   writeFamilyMeta,
   createBackup as createFileBackup,
 } from './file-manager';
 import { LRU_CACHE_SIZE } from '../shared/constants';
+import { getMasterKey } from './user-service';
 
 // ======================== 类型定义 ========================
 
@@ -103,7 +96,6 @@ class LRUCache<K, V> {
 
 // ======================== 内部状态 ========================
 
-let encryptionKey: Buffer | null = null;
 let indexMap = new Map<string, PersonIndex>();
 let personOrder: string[] = []; // 有序 ID 列表，用于分片映射
 const personCache = new LRUCache<string, Person>(LRU_CACHE_SIZE);
@@ -111,8 +103,9 @@ const personCache = new LRUCache<string, Person>(LRU_CACHE_SIZE);
 // ======================== 辅助函数 ========================
 
 function requireKey(): Buffer {
-  if (!encryptionKey) throw new Error('未登录，请先验证密码');
-  return encryptionKey;
+  const key = getMasterKey();
+  if (!key) throw new Error('未登录，请先验证密码');
+  return key;
 }
 
 /** 从所有分片中收集指定 ID 的完整人员信息 */
@@ -198,57 +191,20 @@ function repairBiologicalParentIndex(): void {
   }
 }
 
-/** 检查是否已初始化（是否有 config.json） */
-export function isInitialized(): boolean {
-  const config = readConfig();
-  return config !== null && config.passwordHash !== undefined;
-}
-
-/** 检查是否已登录 */
+/** 检查是否已登录（主密钥是否可用） */
 export function isLoggedIn(): boolean {
-  return encryptionKey !== null;
+  return getMasterKey() !== null;
 }
 
-/** 首次设置密码 */
-export function setupPassword(password: string): void {
-  if (isInitialized()) {
-    throw new Error('密码已设置，不可重复初始化');
-  }
-  ensureDataDir();
-
-  const { hash, salt } = hashPassword(password);
-  const keySalt = Buffer.from(salt, 'hex');
-  encryptionKey = deriveKey(password, keySalt);
-
-  writeConfig({
-    passwordHash: hash,
-    passwordSalt: salt,
-    createdAt: new Date().toISOString(),
-  });
-
-  // 写入空索引
-  indexMap.clear();
-  personOrder = [];
-  persistIndex();
-}
-
-/** 验证密码并初始化 */
-export function initialize(password: string): boolean {
-  const config = readConfig();
-  if (!config) throw new Error('尚未初始化，请先设置密码');
-
-  const hash = config.passwordHash as string;
-  const salt = config.passwordSalt as string;
-
-  if (!verifyPwd(password, hash, salt)) {
-    return false;
-  }
-
-  // 派生加密密钥
-  encryptionKey = deriveKey(password, Buffer.from(salt, 'hex'));
+/**
+ * 加载索引到内存（登录后调用）
+ * 替代旧的 initialize 函数中加载索引的逻辑
+ */
+export function loadIndex(): void {
+  const key = requireKey();
 
   // 加载索引到内存
-  const indexArray = readIndex(encryptionKey);
+  const indexArray = readIndex(key);
   indexMap.clear();
   personOrder = [];
   personCache.clear();
@@ -263,19 +219,22 @@ export function initialize(password: string): boolean {
 
   // 修复旧数据：补全索引中缺失的 biologicalParentId
   repairBiologicalParentIndex();
-
-  return true;
 }
 
-/** 验证密码（不初始化） */
-export function verifyPassword(password: string): boolean {
-  const config = readConfig();
-  if (!config) return false;
-  return verifyPwd(
-    password,
-    config.passwordHash as string,
-    config.passwordSalt as string
-  );
+/** 写入空索引（初始化时调用） */
+export function initEmptyIndex(): void {
+  const key = requireKey();
+  indexMap.clear();
+  personOrder = [];
+  personCache.clear();
+  writeIndex([], key);
+}
+
+/** 清理内存状态（登出时调用） */
+export function clearState(): void {
+  indexMap.clear();
+  personOrder = [];
+  personCache.clear();
 }
 
 /** 计算同辈内下一个可用的 sortOrder（包含亲生但被过继出去的子女） */

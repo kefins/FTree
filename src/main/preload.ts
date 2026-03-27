@@ -2,12 +2,39 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 const ftreeAPI = {
   auth: {
-    check: (): Promise<{ initialized: boolean; loggedIn: boolean }> =>
-      ipcRenderer.invoke('auth:check'),
-    setup: (password: string): Promise<void> =>
-      ipcRenderer.invoke('auth:setup', password),
-    login: (password: string): Promise<boolean> =>
-      ipcRenderer.invoke('auth:login', password),
+    check: (): Promise<{
+      initialized: boolean;
+      loggedIn: boolean;
+      v2: boolean;
+      usernames: string[];
+      user?: { id: string; username: string; displayName: string; role: string };
+    }> => ipcRenderer.invoke('auth:check'),
+    setup: (username: string, password: string, displayName?: string): Promise<{
+      token: string;
+      user: { id: string; username: string; displayName: string; role: string };
+    }> => ipcRenderer.invoke('auth:setup', username, password, displayName),
+    login: (username: string, password: string): Promise<{
+      success: boolean;
+      error?: string;
+      token?: string;
+      user?: { id: string; username: string; displayName: string; role: string };
+      needMigration?: boolean;
+    }> => ipcRenderer.invoke('auth:login', username, password),
+    me: (): Promise<unknown> => ipcRenderer.invoke('auth:me'),
+    changePassword: (oldPassword: string, newPassword: string): Promise<void> =>
+      ipcRenderer.invoke('auth:changePassword', oldPassword, newPassword),
+    logout: (): Promise<void> => ipcRenderer.invoke('auth:logout'),
+    resetData: (): Promise<{ success: boolean; backupDir?: string; error?: string }> =>
+      ipcRenderer.invoke('auth:resetData'),
+  },
+  users: {
+    list: (): Promise<unknown[]> => ipcRenderer.invoke('users:list'),
+    create: (data: unknown): Promise<unknown> => ipcRenderer.invoke('users:create', data),
+    update: (id: string, data: unknown): Promise<unknown> => ipcRenderer.invoke('users:update', id, data),
+    delete: (id: string): Promise<void> => ipcRenderer.invoke('users:delete', id),
+    resetPassword: (id: string, newPassword: string): Promise<void> =>
+      ipcRenderer.invoke('users:resetPassword', id, newPassword),
+    toggle: (id: string): Promise<unknown> => ipcRenderer.invoke('users:toggle', id),
   },
   person: {
     create: (data: unknown): Promise<unknown> =>

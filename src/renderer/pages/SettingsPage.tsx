@@ -15,12 +15,14 @@ import {
   UndoOutlined,
 } from '@ant-design/icons';
 import { api } from '../api/bridge';
+import { useAuth } from '../contexts/AuthContext';
 import GenerationColorConfig from '../components/GenerationColorConfig';
 import GenerationCharConfig from '../components/GenerationCharConfig';
 
 const { Title, Text, Paragraph } = Typography;
 
 const SettingsPage: React.FC = () => {
+  const { permissions } = useAuth();
   const [pwdLoading, setPwdLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
@@ -153,13 +155,7 @@ const SettingsPage: React.FC = () => {
     }
     setPwdLoading(true);
     try {
-      // 先验证旧密码
-      const success = await api.auth.login(values.oldPassword);
-      if (!success) {
-        message.error('当前密码错误');
-        return;
-      }
-      await api.auth.setup(values.newPassword);
+      await api.auth.changePassword(values.oldPassword, values.newPassword);
       message.success('密码修改成功');
       pwdForm.resetFields();
     } catch (err: any) {
@@ -302,6 +298,7 @@ const SettingsPage: React.FC = () => {
       </Card>
 
       {/* 显示设置 */}
+      {permissions.canManageSettings && (
       <Card title={<><BgColorsOutlined className="mr-2" />显示设置</>}>
         <Space direction="vertical" className="w-full" size="middle">
           <div>
@@ -329,9 +326,10 @@ const SettingsPage: React.FC = () => {
           </div>
         </Space>
       </Card>
+      )}
 
-      {/* 数据存储位置（仅 Electron 模式） */}
-      {isElectron && (
+      {/* 数据存储位置（仅 Electron 模式 + admin） */}
+      {isElectron && permissions.canManageData && (
         <Card title={<><FolderOutlined className="mr-2" />数据存储位置</>}>
           <Space direction="vertical" className="w-full" size="middle">
             <div>
@@ -393,6 +391,7 @@ const SettingsPage: React.FC = () => {
       )}
 
       {/* 数据管理 */}
+      {permissions.canManageData && (
       <Card title={<><SaveOutlined className="mr-2" />数据管理</>}>
         <Space direction="vertical" className="w-full" size="middle">
           <div>
@@ -460,6 +459,7 @@ const SettingsPage: React.FC = () => {
           </div>
         </Space>
       </Card>
+      )}
 
       {/* 关于 */}
       <Card title={<><InfoCircleOutlined className="mr-2" />关于</>}>

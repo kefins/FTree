@@ -816,7 +816,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         });
 
       // 配偶详细信息（更紧凑布局，更小字号）
-      // 老家住址
+      // 籍贯
       spouseNodes
         .filter((d) => !!d.data._spouseBirthPlace)
         .append('text')

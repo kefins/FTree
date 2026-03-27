@@ -5,10 +5,12 @@ import PersonList from '../components/PersonList';
 import PersonForm from '../components/PersonForm';
 import { usePersonCRUD } from '../hooks/usePersonCRUD';
 import { useTreeData } from '../hooks/useTreeData';
+import { useAuth } from '../contexts/AuthContext';
 import { api } from '../api/bridge';
 import type { Person, PersonIndex, CreatePersonDTO, UpdatePersonDTO } from '../types/person';
 
 const EditPage: React.FC = () => {
+  const { permissions } = useAuth();
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -94,6 +96,7 @@ const EditPage: React.FC = () => {
           />
         </div>
         <div className="p-3 border-t border-gray-200">
+          {permissions.canEdit && (
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -102,6 +105,7 @@ const EditPage: React.FC = () => {
           >
             新增成员
           </Button>
+          )}
         </div>
       </div>
 
@@ -117,7 +121,7 @@ const EditPage: React.FC = () => {
               rawData={rawData}
               loading={loading}
             />
-            {!isAdding && selectedId && (
+            {!isAdding && selectedId && permissions.canDelete && (
               <div className="px-4 pb-4">
                 <Button danger onClick={handleDelete}>
                   删除此成员

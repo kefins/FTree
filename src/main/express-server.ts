@@ -1,13 +1,11 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { DEFAULT_PORT } from '../shared/constants';
+import type { UserRole } from '../shared/constants';
 import {
-  isInitialized,
   isLoggedIn,
-  setupPassword,
-  initialize,
   createPerson,
   updatePerson,
   deletePerson,
@@ -22,7 +20,81 @@ import {
   clearAllData,
   getGenerationChars,
   saveGenerationChars,
+  loadIndex,
+  initEmptyIndex,
 } from './data-service';
+import {
+  isInitialized,
+  isV1Mode,
+  isV2Mode,
+  setupFirstUser,
+  login,
+  logout,
+  getSessionByToken,
+  getCurrentSession,
+  getCurrentUser,
+  listUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  resetUserPassword,
+  changeOwnPassword,
+  toggleUser,
+  migrateV1ToV2,
+  syncBootstrapAfterMigration,
+  getAvailableUsernames,
+} from './user-service';
+import type { Session } from './user-service';
+
+// 扩展 Request 类型，附加 session 信息
+declare global {
+  namespace Express {
+    interface Request {
+      session?: Session;
+    }
+  }
+}
+
+/** 认证中间件 */
+function authMiddleware(requiredRole?: UserRole) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    // 1. 尝试从 Authorization header 提取 token
+    const authHeader = req.headers.authorization;
+    let session: Session | null = null;
+
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      session = getSessionByToken(token);
+    }
+
+    // 2. 回退到当前进程内会话（IPC 单用户模式）
+    if (!session) {
+      session = getCurrentSession();
+    }
+
+    if (!session) {
+      res.status(401).json({ success: false, error: '未登录' });
+      return;
+    }
+
+    // 3. 检查角色权限
+    if (requiredRole) {
+      const roleLevel: Record<UserRole, number> = {
+        admin: 3,
+        editor: 2,
+        viewer: 1,
+      };
+      if (roleLevel[session.role] < roleLevel[requiredRole]) {
+        res.status(403).json({ success: false, error: '权限不足' });
+        return;
+      }
+    }
+
+    // 4. 将 session 挂到 req 上
+    req.session = session;
+    next();
+  };
+}
 
 /** 创建并配置 Express 应用 */
 export function createExpressApp(): express.Application {
@@ -49,17 +121,32 @@ export function createExpressApp(): express.Application {
     app.use(express.static(distPath));
   }
 
-  // ==================== 认证 API ====================
+  // ==================== 认证 API（公开） ====================
 
   app.post('/api/auth/setup', async (req: Request, res: Response) => {
     try {
-      const { password } = req.body;
+      const { username, password, displayName } = req.body;
       if (!password) {
         res.status(400).json({ success: false, error: '密码不能为空' });
         return;
       }
-      setupPassword(password);
-      res.json({ success: true });
+      if (!username) {
+        res.status(400).json({ success: false, error: '用户名不能为空' });
+        return;
+      }
+      const session = setupFirstUser(username, password, displayName);
+      // 初始化空索引
+      initEmptyIndex();
+      res.json({
+        success: true,
+        token: session.token,
+        user: {
+          id: session.userId,
+          username: session.username,
+          displayName: session.displayName,
+          role: session.role,
+        },
+      });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
@@ -67,17 +154,34 @@ export function createExpressApp(): express.Application {
 
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
-      const { password } = req.body;
+      const { username, password } = req.body;
       if (!password) {
         res.json({ success: false, error: '密码不能为空' });
         return;
       }
-      const ok = initialize(password);
-      if (!ok) {
-        res.json({ success: false, error: '密码错误' });
-        return;
+
+      const result = login(username || 'admin', password);
+
+      // 加载索引
+      loadIndex();
+
+      // 如果需要 V1→V2 迁移
+      if (result.needMigration) {
+        migrateV1ToV2(username || 'admin', password);
+        syncBootstrapAfterMigration();
       }
-      res.json({ success: true });
+
+      res.json({
+        success: true,
+        token: result.session.token,
+        user: {
+          id: result.session.userId,
+          username: result.session.username,
+          displayName: result.session.displayName,
+          role: result.session.role,
+        },
+        needMigration: result.needMigration,
+      });
     } catch (e: any) {
       res.json({ success: false, error: e.message });
     }
@@ -85,7 +189,136 @@ export function createExpressApp(): express.Application {
 
   app.get('/api/auth/check', async (_req: Request, res: Response) => {
     try {
-      res.json({ initialized: isInitialized(), loggedIn: isLoggedIn() });
+      const initialized = isInitialized();
+      const loggedIn = isLoggedIn();
+      const v2 = isV2Mode();
+      const usernames = v2 ? getAvailableUsernames() : [];
+      const session = getCurrentSession();
+      res.json({
+        initialized,
+        loggedIn,
+        v2,
+        usernames,
+        user: session
+          ? {
+              id: session.userId,
+              username: session.username,
+              displayName: session.displayName,
+              role: session.role,
+            }
+          : undefined,
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get('/api/auth/me', authMiddleware('viewer'), async (req: Request, res: Response) => {
+    try {
+      const user = getCurrentUser();
+      if (!user) {
+        res.status(401).json({ success: false, error: '未登录' });
+        return;
+      }
+      res.json(user);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.put('/api/auth/password', authMiddleware('viewer'), async (req: Request, res: Response) => {
+    try {
+      const { oldPassword, newPassword } = req.body;
+      if (!oldPassword || !newPassword) {
+        res.status(400).json({ success: false, error: '缺少必要参数' });
+        return;
+      }
+      if (newPassword.length < 4) {
+        res.status(400).json({ success: false, error: '新密码至少 4 位' });
+        return;
+      }
+      changeOwnPassword(req.session!.userId, oldPassword, newPassword);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post('/api/auth/logout', async (req: Request, res: Response) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        logout(authHeader.substring(7));
+      } else {
+        logout();
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // ==================== 用户管理 API（仅 admin） ====================
+
+  app.get('/api/users', authMiddleware('admin'), async (_req: Request, res: Response) => {
+    try {
+      const users = listUsers();
+      res.json(users);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post('/api/users', authMiddleware('admin'), async (req: Request, res: Response) => {
+    try {
+      const { username, displayName, password, role } = req.body;
+      if (!username || !password) {
+        res.status(400).json({ success: false, error: '用户名和密码不能为空' });
+        return;
+      }
+      const user = createUser({ username, displayName: displayName || username, password, role: role || 'viewer' });
+      res.json(user);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.put('/api/users/:id', authMiddleware('admin'), async (req: Request, res: Response) => {
+    try {
+      const user = updateUser(req.params.id, req.body);
+      res.json(user);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.delete('/api/users/:id', authMiddleware('admin'), async (req: Request, res: Response) => {
+    try {
+      deleteUser(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.put('/api/users/:id/reset-password', authMiddleware('admin'), async (req: Request, res: Response) => {
+    try {
+      const { newPassword } = req.body;
+      if (!newPassword) {
+        res.status(400).json({ success: false, error: '新密码不能为空' });
+        return;
+      }
+      resetUserPassword(req.params.id, newPassword);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.put('/api/users/:id/toggle', authMiddleware('admin'), async (req: Request, res: Response) => {
+    try {
+      const user = toggleUser(req.params.id);
+      res.json(user);
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
@@ -94,7 +327,7 @@ export function createExpressApp(): express.Application {
   // ==================== 人员管理 API ====================
   // 前端使用 /person (单数)
 
-  app.get('/api/person', async (req: Request, res: Response) => {
+  app.get('/api/person', authMiddleware('viewer'), async (req: Request, res: Response) => {
     try {
       const query = {
         search: req.query.search as string | undefined,
@@ -112,7 +345,7 @@ export function createExpressApp(): express.Application {
     }
   });
 
-  app.post('/api/person', async (req: Request, res: Response) => {
+  app.post('/api/person', authMiddleware('editor'), async (req: Request, res: Response) => {
     try {
       const person = createPerson(req.body);
       res.json(person);
@@ -121,7 +354,7 @@ export function createExpressApp(): express.Application {
     }
   });
 
-  app.get('/api/person/:id', async (req: Request, res: Response) => {
+  app.get('/api/person/:id', authMiddleware('viewer'), async (req: Request, res: Response) => {
     try {
       const person = getPerson(req.params.id);
       if (!person) {
@@ -134,7 +367,7 @@ export function createExpressApp(): express.Application {
     }
   });
 
-  app.put('/api/person/:id', async (req: Request, res: Response) => {
+  app.put('/api/person/:id', authMiddleware('editor'), async (req: Request, res: Response) => {
     try {
       const person = updatePerson(req.params.id, req.body);
       res.json(person);
@@ -143,7 +376,7 @@ export function createExpressApp(): express.Application {
     }
   });
 
-  app.delete('/api/person/:id', async (req: Request, res: Response) => {
+  app.delete('/api/person/:id', authMiddleware('admin'), async (req: Request, res: Response) => {
     try {
       deletePerson(req.params.id);
       res.json({ success: true });
@@ -154,7 +387,7 @@ export function createExpressApp(): express.Application {
 
   // ==================== 树数据 API ====================
 
-  app.get('/api/tree', async (_req: Request, res: Response) => {
+  app.get('/api/tree', authMiddleware('viewer'), async (_req: Request, res: Response) => {
     try {
       const data = getTreeData();
       res.json(data);
@@ -163,7 +396,7 @@ export function createExpressApp(): express.Application {
     }
   });
 
-  app.get('/api/tree/children/:parentId', async (req: Request, res: Response) => {
+  app.get('/api/tree/children/:parentId', authMiddleware('viewer'), async (req: Request, res: Response) => {
     try {
       const data = getChildren(req.params.parentId);
       res.json({ success: true, data });
@@ -172,7 +405,7 @@ export function createExpressApp(): express.Application {
     }
   });
 
-  app.post('/api/tree/reorder', async (req: Request, res: Response) => {
+  app.post('/api/tree/reorder', authMiddleware('editor'), async (req: Request, res: Response) => {
     try {
       const { parentId, orderedIds } = req.body;
       reorderChildren(parentId, orderedIds);
@@ -184,7 +417,7 @@ export function createExpressApp(): express.Application {
 
   // ==================== 数据导入导出 API ====================
 
-  app.post('/api/data/export', async (_req: Request, res: Response) => {
+  app.post('/api/data/export', authMiddleware('admin'), async (_req: Request, res: Response) => {
     try {
       const data = exportData();
       res.json(data);
@@ -193,7 +426,7 @@ export function createExpressApp(): express.Application {
     }
   });
 
-  app.post('/api/data/import', async (req: Request, res: Response) => {
+  app.post('/api/data/import', authMiddleware('admin'), async (req: Request, res: Response) => {
     try {
       // 兼容新格式（含 persons + generationChars 的对象）和旧格式（纯数组或 { data: [...] }）
       const body = req.body;
@@ -213,7 +446,7 @@ export function createExpressApp(): express.Application {
     }
   });
 
-  app.post('/api/data/backup', async (_req: Request, res: Response) => {
+  app.post('/api/data/backup', authMiddleware('admin'), async (_req: Request, res: Response) => {
     try {
       const backupPath = backup();
       res.json({ path: backupPath });
@@ -222,7 +455,7 @@ export function createExpressApp(): express.Application {
     }
   });
 
-  app.post('/api/data/clear', async (_req: Request, res: Response) => {
+  app.post('/api/data/clear', authMiddleware('admin'), async (_req: Request, res: Response) => {
     try {
       clearAllData();
       res.json({ success: true });
@@ -233,7 +466,7 @@ export function createExpressApp(): express.Application {
 
   // ==================== 辈分字配置 API ====================
 
-  app.get('/api/config/generation-chars', async (_req: Request, res: Response) => {
+  app.get('/api/config/generation-chars', authMiddleware('viewer'), async (_req: Request, res: Response) => {
     try {
       const data = getGenerationChars();
       res.json(data);
@@ -242,7 +475,7 @@ export function createExpressApp(): express.Application {
     }
   });
 
-  app.put('/api/config/generation-chars', async (req: Request, res: Response) => {
+  app.put('/api/config/generation-chars', authMiddleware('editor'), async (req: Request, res: Response) => {
     try {
       saveGenerationChars(req.body);
       res.json({ success: true });
@@ -254,7 +487,7 @@ export function createExpressApp(): express.Application {
   // ==================== 导出图片 API ====================
   // 前端发送 FormData (multipart/form-data)，文件字段名为 'file'
 
-  app.post('/api/export/image', async (req: Request, res: Response) => {
+  app.post('/api/export/image', authMiddleware('viewer'), async (req: Request, res: Response) => {
     try {
       // 手动解析 multipart 数据
       const chunks: Buffer[] = [];
