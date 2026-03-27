@@ -62,9 +62,10 @@ const TreePage: React.FC = () => {
   const [colorConfigVisible, setColorConfigVisible] = useState(false);
   const [colorVersion, setColorVersion] = useState(0);
 
-  // 显示详情/配偶信息的控制状态
+  // 显示详情/配偶信息/女性成员的控制状态
   const [showDetail, setShowDetail] = useState(false);
   const [showSpouse, setShowSpouse] = useState(false);
+  const [showFemale, setShowFemale] = useState(true);
   const [personDetailMap, setPersonDetailMap] = useState<Map<string, Person>>(new Map());
   const [printVisible, setPrintVisible] = useState(false);
   const [linkStyle, setLinkStyle] = useState<LinkStyle>('curve');
@@ -245,6 +246,8 @@ const TreePage: React.FC = () => {
         hasLockedNodes={lockedIds.size > 0}
         showDetail={showDetail}
         onToggleDetail={() => setShowDetail((v) => !v)}
+        showFemale={showFemale}
+        onToggleFemale={() => setShowFemale((v) => !v)}
         showSpouse={showSpouse}
         onToggleSpouse={() => setShowSpouse((v) => !v)}
         onPrint={() => setPrintVisible(true)}
@@ -269,6 +272,7 @@ const TreePage: React.FC = () => {
         rawData={rawData}
         showDetail={showDetail}
         showSpouse={showSpouse}
+        showFemale={showFemale}
         personDetailMap={personDetailMap}
         linkStyle={linkStyle}
         generationChars={generationChars}

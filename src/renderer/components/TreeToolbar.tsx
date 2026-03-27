@@ -35,6 +35,9 @@ interface TreeToolbarProps {
   /** 是否显示个人详细信息 */
   showDetail?: boolean;
   onToggleDetail?: () => void;
+  /** 是否显示女性成员 */
+  showFemale?: boolean;
+  onToggleFemale?: () => void;
   /** 是否显示配偶信息 */
   showSpouse?: boolean;
   onToggleSpouse?: () => void;
@@ -65,6 +68,8 @@ const TreeToolbar: React.FC<TreeToolbarProps> = ({
   hasLockedNodes,
   showDetail = false,
   onToggleDetail,
+  showFemale = true,
+  onToggleFemale,
   showSpouse = false,
   onToggleSpouse,
   onPrint,
@@ -133,6 +138,17 @@ const TreeToolbar: React.FC<TreeToolbarProps> = ({
             type={showDetail ? 'primary' : 'default'}
             onClick={onToggleDetail}
           />
+        </Tooltip>
+
+        <Tooltip title={showFemale ? '隐藏女性成员' : '显示女性成员'}>
+          <Button
+            size="small"
+            type={showFemale ? 'primary' : 'default'}
+            onClick={onToggleFemale}
+            style={{ fontSize: 12, fontWeight: 600, minWidth: 28 }}
+          >
+            ♀
+          </Button>
         </Tooltip>
 
         <Tooltip title={showSpouse ? '隐藏配偶信息' : '显示配偶信息'}>

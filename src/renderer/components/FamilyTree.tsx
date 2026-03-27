@@ -115,8 +115,14 @@ function filterByExpanded(
   adoptedIds?: Set<string>,
   rawData?: PersonIndex[],
   personDetailMap?: Map<string, Person>,
+  showFemale = true,
 ): HierarchyNode[] {
-  return nodes.map((node) => {
+  // 当 showFemale 为 false 时，过滤掉女性节点（占位节点保留）
+  const filteredNodes = showFemale
+    ? nodes
+    : nodes.filter((n) => n.gender !== 'female' || n.id.startsWith('__placeholder__'));
+
+  return filteredNodes.map((node) => {
     const isPlaceholder = node.id.startsWith('__placeholder__');
 
     // 计算排行标签（占位节点不需要）
@@ -169,7 +175,7 @@ function filterByExpanded(
       children:
         // 占位节点和真实节点都按 expandedIds 控制展开/折叠
         expandedIds.has(node.id) && node.children.length > 0
-          ? filterByExpanded(node.children, expandedIds, adoptedIds, rawData, personDetailMap)
+          ? filterByExpanded(node.children, expandedIds, adoptedIds, rawData, personDetailMap, showFemale)
           : undefined,
     };
   });
@@ -193,6 +199,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   rawData = [],
   showDetail = false,
   showSpouse = false,
+  showFemale = true,
   personDetailMap,
   linkStyle = 'curve',
   generationChars = {},
@@ -298,7 +305,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     // 根据展开状态过滤
     const adoptedIds = new Set(adoptionLinks.map((l) => l.childId));
-    const visibleData = filterByExpanded(data, expandedIds, adoptedIds, rawData, personDetailMap);
+    const visibleData = filterByExpanded(data, expandedIds, adoptedIds, rawData, personDetailMap, showFemale);
 
     if (visibleData.length === 0) return;
 
@@ -1051,7 +1058,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     }
 
     // 空白点击取消选中的逻辑已移到独立 useEffect 中（见下方）
-  }, [data, adoptionLinks, expandedIds, colorVersion, rawData, showDetail, showSpouse, personDetailMap, buildLinkPath, generationChars]);
+  }, [data, adoptionLinks, expandedIds, colorVersion, rawData, showDetail, showSpouse, showFemale, personDetailMap, buildLinkPath, generationChars]);
 
   useEffect(() => {
     renderTree();

@@ -99,6 +99,7 @@ function buildLineageTree(
   targetId: string,
   rawData: PersonIndex[],
   personDetailMap?: Map<string, Person>,
+  showFemale = true,
 ): LineageNode | null {
   const personMap = new Map<string, PersonIndex>();
   for (const p of rawData) {
@@ -131,7 +132,11 @@ function buildLineageTree(
 
   // 递归构建树节点
   function buildNode(p: PersonIndex): LineageNode {
-    const children = childrenMap.get(p.id) || [];
+    let children = childrenMap.get(p.id) || [];
+    // 过滤女性子节点（目标人物本身的祖先链不过滤）
+    if (!showFemale) {
+      children = children.filter((c) => c.gender !== 'female');
+    }
     const detail = personDetailMap?.get(p.id);
     return {
       id: p.id,
@@ -609,6 +614,7 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
   const [exportScope, setExportScope] = useState<ExportScope>('all');
   const [targetPersonId, setTargetPersonId] = useState<string | null>(selectedId ?? null);
   const [exportSpouse, setExportSpouse] = useState(true);
+  const [exportFemale, setExportFemale] = useState(true);
 
   // 当 selectedId 变化时同步更新 targetPersonId
   React.useEffect(() => {
@@ -646,7 +652,7 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
         // ====== 直系血脉模式：从 rawData 独立构建子树并渲染 ======
         setProgress(15);
 
-        const lineageRoot = buildLineageTree(targetPersonId, rawData, personDetailMap);
+        const lineageRoot = buildLineageTree(targetPersonId, rawData, personDetailMap, exportFemale);
         if (!lineageRoot) {
           message.error('未找到目标人物数据');
           setExporting(false);
@@ -692,6 +698,17 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
           // 如果不导出配偶信息，移除克隆 SVG 中的配偶相关元素
           if (!exportSpouse) {
             clonedTreeRoot.querySelectorAll('.spouse-link, .spouse-box, .spouse-label, .spouse-name, .spouse-detail-text').forEach((el) => el.remove());
+          }
+
+          // 如果不导出女性成员，移除克隆 SVG 中的女性节点和相关连线
+          if (!exportFemale) {
+            // 收集要移除的女性节点 ID
+            const femaleNodeIds = new Set<string>();
+            clonedTreeRoot.querySelectorAll('.tree-node-female').forEach((el) => {
+              // 从 data-id 属性获取节点 ID（如果有的话）
+              femaleNodeIds.add(el.getAttribute('data-id') || '');
+              el.remove();
+            });
           }
         }
 
@@ -901,6 +918,26 @@ const ExportDialog: React.FC<ExportDialogProps> = ({
             }}
           >
             勾选后将在每个节点旁显示配偶姓名等信息
+          </div>
+        </div>
+
+        <div>
+          <Checkbox
+            checked={exportFemale}
+            onChange={(e) => setExportFemale(e.target.checked)}
+          >
+            导出女性成员
+          </Checkbox>
+          <div
+            style={{
+              marginTop: 4,
+              fontSize: 12,
+              color: '#999',
+              lineHeight: 1.5,
+              paddingLeft: 24,
+            }}
+          >
+            取消勾选后将隐藏所有女性成员节点
           </div>
         </div>
 
