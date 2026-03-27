@@ -45,10 +45,13 @@ const TreePage: React.FC = () => {
     selectNode,
     clearSelection,
     refresh,
+    silentRefresh,
     refreshAndExpand,
   } = useTreeData();
 
-  const { create, update, remove } = usePersonCRUD(refresh);
+  // 不传 onSuccess 给 usePersonCRUD，避免双重刷新：
+  // NodeDetail 在保存/删除后会自行调用 onRefresh / onRefreshAndExpand
+  const { create, update, remove } = usePersonCRUD();
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -181,12 +184,21 @@ const TreePage: React.FC = () => {
     [update],
   );
 
-  // 添加子女
+  // 添加子女（直接调用 API，不通过 usePersonCRUD.create）
+  // 这样避免 usePersonCRUD 的 onSuccess 自动触发 refresh，
+  // 而是由 NodeDetail.handleSaveChild 中的 refreshAndExpand 统一刷新，
+  // 从而避免双重 fetchData 导致的两次重渲染和视图跳动。
   const handleAddChild = useCallback(
     async (data: any) => {
-      return await create(data);
+      try {
+        const person = await api.person.create(data);
+        return person;
+      } catch (err: any) {
+        message.error(err?.message || '添加失败');
+        return null;
+      }
     },
-    [create],
+    [],
   );
 
   // 删除成员
@@ -371,7 +383,7 @@ const TreePage: React.FC = () => {
         onSave={handleSave}
         onAddChild={handleAddChild}
         onDelete={handleDelete}
-        onRefresh={refresh}
+        onRefresh={silentRefresh}
         onRefreshAndExpand={refreshAndExpand}
         initialMode={openDetailMode}
         generationChars={generationChars}

@@ -195,8 +195,18 @@ export function createExpressApp(): express.Application {
 
   app.post('/api/data/import', async (req: Request, res: Response) => {
     try {
-      const { data } = req.body;
-      importData(data);
+      // 兼容新格式（含 persons + generationChars 的对象）和旧格式（纯数组或 { data: [...] }）
+      const body = req.body;
+      if (Array.isArray(body)) {
+        importData(body);
+      } else if (body.persons) {
+        importData(body);
+      } else if (body.data) {
+        importData(body.data);
+      } else {
+        res.status(400).json({ success: false, error: '数据格式不正确' });
+        return;
+      }
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });

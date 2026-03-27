@@ -512,8 +512,19 @@ export function reorderChildren(parentId: string, orderedIds: string[]): void {
   persistIndex();
 }
 
-/** 导出明文数据 */
-export function exportData(): Person[] {
+/** 导出数据（包含完整格式：人员 + 字辈配置） */
+export interface ExportDataResult {
+  version: string;
+  exportedAt: string;
+  persons: Person[];
+  generationChars?: {
+    poem?: string;
+    characters: Record<number, string>;
+  };
+}
+
+/** 导出明文数据（包含人员和字辈信息） */
+export function exportData(): ExportDataResult {
   requireKey();
 
   const persons: Person[] = [];
@@ -523,12 +534,32 @@ export function exportData(): Person[] {
     if (person) persons.push(person);
   }
 
-  return persons;
+  // 一并导出字辈配置
+  const genChars = getGenerationChars();
+  const hasGenChars = genChars.poem || Object.keys(genChars.characters).length > 0;
+
+  return {
+    version: '1.0',
+    exportedAt: new Date().toISOString(),
+    persons,
+    generationChars: hasGenChars ? genChars : undefined,
+  };
 }
 
-/** 导入明文数据 */
-export function importData(persons: Person[]): void {
+/** 导入明文数据（支持新格式含字辈，也兼容旧格式纯数组） */
+export function importData(input: Person[] | ExportDataResult): void {
   requireKey();
+
+  // 兼容旧格式：如果传入的是数组，视为纯人员数据
+  let persons: Person[];
+  let genCharsData: { poem?: string; characters: Record<number, string> } | undefined;
+
+  if (Array.isArray(input)) {
+    persons = input;
+  } else {
+    persons = input.persons || [];
+    genCharsData = input.generationChars;
+  }
 
   // 重建索引
   indexMap.clear();
@@ -569,6 +600,11 @@ export function importData(persons: Person[]): void {
   const key = requireKey();
   for (const [chunkId, chunkData] of chunks.entries()) {
     writeChunk(chunkId, chunkData, key);
+  }
+
+  // 如果有字辈配置，一并恢复
+  if (genCharsData) {
+    saveGenerationChars(genCharsData);
   }
 }
 

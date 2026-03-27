@@ -199,6 +199,40 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const gRef = useRef<SVGGElement | null>(null);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
+  /** 标记是否是首次渲染（首次渲染创建 <g> 并居中显示，后续渲染复用 <g>） */
+  const isFirstRenderRef = useRef(true);
+  /**
+   * 上一次渲染时各节点在 D3 tree layout 中的坐标。
+   * key = 节点 id, value = { x, y } (layout 坐标，非屏幕坐标)
+   * 用于在数据变化后补偿视图内部坐标偏移，使得用户正在观看的区域保持不变。
+   */
+  const prevNodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+  // ====== 用 ref 包装所有回调函数，避免引用变化导致 renderTree 重建 ======
+  const onNodeClickRef = useRef(onNodeClick);
+  onNodeClickRef.current = onNodeClick;
+  const onNodeSelectRef = useRef(onNodeSelect);
+  onNodeSelectRef.current = onNodeSelect;
+  const onNodeDblClickRef = useRef(onNodeDblClick);
+  onNodeDblClickRef.current = onNodeDblClick;
+  const onNodeContextMenuRef = useRef(onNodeContextMenu);
+  onNodeContextMenuRef.current = onNodeContextMenu;
+  const onToggleNodeRef = useRef(onToggleNode);
+  onToggleNodeRef.current = onToggleNode;
+  const onToggleLockRef = useRef(onToggleLock);
+  onToggleLockRef.current = onToggleLock;
+  const onClickBlankRef = useRef(onClickBlank);
+  onClickBlankRef.current = onClickBlank;
+
+  // 用 ref 保存样式相关的 props，避免它们的变化触发完整重绘
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
+  const ancestorIdsRef = useRef(ancestorIds);
+  ancestorIdsRef.current = ancestorIds;
+  const highlightIdRef = useRef(highlightId);
+  highlightIdRef.current = highlightId;
+  const lockedIdsRef = useRef(lockedIds);
+  lockedIdsRef.current = lockedIds;
 
   /** 根据连线样式生成 SVG path 的 d 属性 */
   const buildLinkPath = useCallback(
@@ -241,8 +275,23 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       return getGenderedColor(getColor(gen), gender);
     };
 
-    // 清除旧内容
-    svg.selectAll('g.tree-root').remove();
+    // ====== 复用已有的 <g> 元素，只清除内部子元素 ======
+    // 这是防止视图跳转的关键：不删除 <g> 本身，保持其 transform 属性不变。
+    // D3 zoom 的 transform 存储在 <g> 的 transform 属性上，
+    // 如果删除 <g> 再重建，即使手动恢复 transform 也可能在时序上出现跳动。
+    let g: d3.Selection<SVGGElement, unknown, null, undefined>;
+    const isFirstRender = isFirstRenderRef.current;
+
+    if (gRef.current && !isFirstRender) {
+      // 非首次渲染：复用现有 <g>，只清除内部内容
+      g = d3.select(gRef.current);
+      g.selectAll('*').remove();
+    } else {
+      // 首次渲染：删除可能存在的旧 <g>（防御性），创建新 <g>
+      svg.selectAll('g.tree-root').remove();
+      g = svg.append('g').attr('class', 'tree-root');
+      gRef.current = g.node();
+    }
 
     // 根据展开状态过滤
     const adoptedIds = new Set(adoptionLinks.map((l) => l.childId));
@@ -315,9 +364,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       }
     }
 
-    const g = svg.append('g').attr('class', 'tree-root');
-    gRef.current = g.node();
-
     // 计算平移居中（仅用于首次初始化）
     const nodes = root.descendants();
     const minX = d3.min(nodes, (d) => d.x!) || 0;
@@ -326,14 +372,62 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     const offsetX = width / 2 - treeWidth / 2 - minX;
     const offsetY = 60;
 
-    // 如果 zoom 已初始化（非首次渲染），使用当前的 zoom transform 保持视图位置不变
-    // 这样单击选中节点等操作不会导致画面跳回初始居中位置
-    if (zoomRef.current) {
-      const currentTransform = d3.zoomTransform(svg.node()!);
-      g.attr('transform', currentTransform.toString());
-    } else {
+    if (isFirstRender) {
+      // 首次渲染：居中显示
       g.attr('transform', `translate(${offsetX}, ${offsetY})`);
+      isFirstRenderRef.current = false;
+    } else if (zoomRef.current && prevNodePositionsRef.current.size > 0) {
+      // 非首次渲染：<g> 被复用，其 transform 保持不变。
+      // 但 D3 tree layout 的内部坐标可能因新增/删除节点而整体偏移，
+      // 需要通过调整 zoom transform 来补偿这个偏移量。
+      const prevPositions = prevNodePositionsRef.current;
+      const currentTransform = d3.zoomTransform(svgRef.current!);
+      const k = currentTransform.k;
+      const tx = currentTransform.x;
+      const ty = currentTransform.y;
+
+      // 找到锚点节点：选择距离屏幕中心最近的、在新旧布局中都存在的节点
+      const screenCx = width / 2;
+      const screenCy = height / 2;
+      let bestAnchor: { oldX: number; oldY: number; newX: number; newY: number } | null = null;
+      let bestDist = Infinity;
+
+      for (const n of nodes) {
+        if (n.data.id === '__root__') continue;
+        const oldPos = prevPositions.get(n.data.id);
+        if (!oldPos) continue;
+        const screenX = oldPos.x * k + tx;
+        const screenY = oldPos.y * k + ty;
+        const dist = (screenX - screenCx) ** 2 + (screenY - screenCy) ** 2;
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestAnchor = { oldX: oldPos.x, oldY: oldPos.y, newX: n.x!, newY: n.y! };
+        }
+      }
+
+      if (bestAnchor) {
+        const dx = bestAnchor.newX - bestAnchor.oldX;
+        const dy = bestAnchor.newY - bestAnchor.oldY;
+        if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
+          const newTx = tx - dx * k;
+          const newTy = ty - dy * k;
+          const compensated = d3.zoomIdentity.translate(newTx, newTy).scale(k);
+          g.attr('transform', compensated.toString());
+          // 静默更新 D3 zoom 内部状态
+          (svgRef.current as any).__zoom = compensated;
+        }
+        // 如果 dx/dy 为 0，<g> 的 transform 已经正确，无需修改
+      }
     }
+
+    // 保存当前节点坐标，供下次渲染时计算偏移
+    const currentNodePositions = new Map<string, { x: number; y: number }>();
+    for (const n of nodes) {
+      if (n.data.id !== '__root__') {
+        currentNodePositions.set(n.data.id, { x: n.x!, y: n.y! });
+      }
+    }
+    prevNodePositionsRef.current = currentNodePositions;
 
     // 绘制连接线
     const linksData = root.links().filter((l) => l.source.data.id !== '__root__' || visibleData.length > 1);
@@ -346,12 +440,14 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         // 如果这条连线连接的是选中节点或祖先链上的节点，添加高亮类名
         const sourceId = d.source.data.id;
         const targetId = d.target.data.id;
+        const _selectedId = selectedIdRef.current;
+        const _ancestorIds = ancestorIdsRef.current;
         const isAncestorLink = 
-          (selectedId && (targetId === selectedId || ancestorIds.has(targetId))) &&
-          (ancestorIds.has(sourceId) || sourceId === '__root__');
+          (_selectedId && (targetId === _selectedId || _ancestorIds.has(targetId))) &&
+          (_ancestorIds.has(sourceId) || sourceId === '__root__');
         if (isAncestorLink) {
           cls += ' tree-link-ancestor';
-        } else if (selectedId) {
+        } else if (_selectedId) {
           // 有选中节点时，非祖先链连线淡化
           cls += ' tree-link-dimmed';
         }
@@ -387,14 +483,14 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .append('g')
       .attr('class', (d) => {
         let cls = `tree-node tree-node-${d.data.gender}`;
-        if (highlightId && d.data.id === highlightId) {
+        if (highlightIdRef.current && d.data.id === highlightIdRef.current) {
           cls += ' tree-node-highlight';
         }
-        if (selectedId && d.data.id === selectedId) {
+        if (selectedIdRef.current && d.data.id === selectedIdRef.current) {
           cls += ' tree-node-selected';
-        } else if (ancestorIds.has(d.data.id)) {
+        } else if (ancestorIdsRef.current.has(d.data.id)) {
           cls += ' tree-node-ancestor';
-        } else if (selectedId) {
+        } else if (selectedIdRef.current) {
           // 有选中节点时，非关联节点淡化
           cls += ' tree-node-dimmed';
         }
@@ -407,11 +503,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         // 占位节点不触发点击
         if (!d.data._isPlaceholder) {
           // 单击：仅高亮选中节点及其祖先链，不打开编辑面板
-          if (onNodeSelect) {
-            onNodeSelect(d.data.id);
+          if (onNodeSelectRef.current) {
+            onNodeSelectRef.current(d.data.id);
           } else {
             // 兼容旧的 onNodeClick 回调
-            onNodeClick?.(d.data.id);
+            onNodeClickRef.current?.(d.data.id);
           }
         }
       })
@@ -422,7 +518,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         // 占位节点不触发双击
         if (!d.data._isPlaceholder) {
           // 双击：打开详情/编辑面板
-          onNodeDblClick?.(d.data.id);
+          onNodeDblClickRef.current?.(d.data.id);
         }
       })
       .on('contextmenu', (event, d) => {
@@ -431,7 +527,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           event.preventDefault();
           event.stopPropagation();
           // 右键：弹出上下文菜单
-          onNodeContextMenu?.(d.data.id, event.pageX, event.pageY);
+          onNodeContextMenuRef.current?.(d.data.id, event.pageX, event.pageY);
         }
       })
       .on('mouseenter', (event, d) => {
@@ -481,7 +577,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             .style('filter', 'drop-shadow(0 1px 3px rgba(0, 0, 0, 0.1))');
         }
         // 锁定节点：添加金色边框
-        if (lockedIds.has(d.data.id)) {
+        if (lockedIdsRef.current.has(d.data.id)) {
           sel
             .style('stroke', '#f57c00')
             .style('stroke-width', '2.5px')
@@ -491,7 +587,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     // 锁定节点左上角小锁图标
     nodeGroup
-      .filter((d) => lockedIds.has(d.data.id))
+      .filter((d) => lockedIdsRef.current.has(d.data.id))
       .append('text')
       .attr('class', 'node-lock-icon')
       .attr('x', 4)
@@ -838,7 +934,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr('transform', (d) => `translate(${d.x!}, ${d.y! + NODE_HEIGHT / 2 + 12})`)
       .on('click', (event, d) => {
         event.stopPropagation();
-        onToggleNode?.(d.data.id);
+        onToggleNodeRef.current?.(d.data.id);
       });
 
     btnGroup.append('circle').attr('r', 10);
@@ -859,14 +955,14 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .style('cursor', 'pointer')
       .on('click', (event, d) => {
         event.stopPropagation();
-        onToggleLock?.(d.data.id);
+        onToggleLockRef.current?.(d.data.id);
       });
 
     lockBtnGroup
       .append('circle')
       .attr('r', 8)
-      .style('fill', (d) => lockedIds.has(d.data.id) ? '#fff3e0' : 'rgba(255,255,255,0.85)')
-      .style('stroke', (d) => lockedIds.has(d.data.id) ? '#f57c00' : '#ccc')
+      .style('fill', (d) => lockedIdsRef.current.has(d.data.id) ? '#fff3e0' : 'rgba(255,255,255,0.85)')
+      .style('stroke', (d) => lockedIdsRef.current.has(d.data.id) ? '#f57c00' : '#ccc')
       .style('stroke-width', '1.2px');
 
     lockBtnGroup
@@ -876,7 +972,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .style('font-size', '9px')
       .style('pointer-events', 'none')
       .style('user-select', 'none')
-      .text((d) => lockedIds.has(d.data.id) ? '🔒' : '🔓');
+      .text((d) => lockedIdsRef.current.has(d.data.id) ? '🔒' : '🔓');
 
     // 绘制过继关系虚线（亲生父亲 → 过继子女）
     if (adoptionLinks.length > 0) {
@@ -922,17 +1018,58 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       // 禁用 D3 默认的双击缩放行为，避免与节点双击事件冲突
       svg.on('dblclick.zoom', null);
 
-      // 初始缩放
+      // 首次渲染：静默设置初始 zoom 状态（不通过 event，避免竞态）
       const initialTransform = d3.zoomIdentity.translate(offsetX, offsetY);
-      svg.call(zoom.transform, initialTransform);
+      (svg.node() as any).__zoom = initialTransform;
     }
 
     // 空白点击取消选中的逻辑已移到独立 useEffect 中（见下方）
-  }, [data, adoptionLinks, expandedIds, lockedIds, highlightId, selectedId, ancestorIds, onNodeClick, onNodeSelect, onNodeDblClick, onNodeContextMenu, onToggleNode, onToggleLock, colorVersion, rawData, showDetail, showSpouse, personDetailMap, buildLinkPath, generationChars]);
+  }, [data, adoptionLinks, expandedIds, colorVersion, rawData, showDetail, showSpouse, personDetailMap, buildLinkPath, generationChars]);
 
   useEffect(() => {
     renderTree();
   }, [renderTree]);
+
+  // ★ 独立的样式更新 effect：当 selectedId / ancestorIds / highlightId / lockedIds 变化时，
+  // 只更新现有 DOM 元素的 CSS class，不销毁重建 SVG DOM，从而避免视图跳转。
+  useEffect(() => {
+    if (!svgRef.current || !gRef.current) return;
+    const g = d3.select(gRef.current);
+
+    // 更新节点 class
+    g.selectAll<SVGGElement, d3.HierarchyNode<HierarchyNode>>('.tree-node')
+      .attr('class', (d) => {
+        let cls = `tree-node tree-node-${d.data.gender}`;
+        if (highlightId && d.data.id === highlightId) {
+          cls += ' tree-node-highlight';
+        }
+        if (selectedId && d.data.id === selectedId) {
+          cls += ' tree-node-selected';
+        } else if (ancestorIds.has(d.data.id)) {
+          cls += ' tree-node-ancestor';
+        } else if (selectedId) {
+          cls += ' tree-node-dimmed';
+        }
+        return cls;
+      });
+
+    // 更新连线 class
+    g.selectAll<SVGPathElement, d3.HierarchyLink<HierarchyNode>>('.tree-link')
+      .attr('class', (d) => {
+        let cls = 'tree-link';
+        const sourceId = d.source.data.id;
+        const targetId = d.target.data.id;
+        const isAncestorLink =
+          (selectedId && (targetId === selectedId || ancestorIds.has(targetId))) &&
+          (ancestorIds.has(sourceId) || sourceId === '__root__');
+        if (isAncestorLink) {
+          cls += ' tree-link-ancestor';
+        } else if (selectedId) {
+          cls += ' tree-link-dimmed';
+        }
+        return cls;
+      });
+  }, [selectedId, ancestorIds, highlightId, lockedIds]);
 
   // ★ 独立的空白区域点击检测
   // 关键：D3 zoom 会在 click 事件中调用 stopImmediatePropagation()，
@@ -967,7 +1104,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         target.closest('.tree-expand-btn') ||
         target.closest('.tree-lock-btn');
       if (!isOnInteractive) {
-        onClickBlank?.();
+        onClickBlankRef.current?.();
       }
     };
 
@@ -979,7 +1116,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       svgEl.removeEventListener('pointerdown', handlePointerDown, true);
       svgEl.removeEventListener('pointerup', handlePointerUp, true);
     };
-  }, [onClickBlank]);
+  }, []);
 
   // 暴露缩放方法
   const zoomIn = useCallback(() => {

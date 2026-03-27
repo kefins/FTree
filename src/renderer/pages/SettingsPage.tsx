@@ -182,7 +182,11 @@ const SettingsPage: React.FC = () => {
       a.download = `ftree_export_${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      message.success('数据导出成功');
+      // 统计导出信息
+      const personCount = Array.isArray(data) ? data.length : (data.persons?.length ?? 0);
+      const hasGenChars = !Array.isArray(data) && data.generationChars;
+      const extra = hasGenChars ? '（含字辈配置）' : '';
+      message.success(`数据导出成功：${personCount} 人${extra}`);
     } catch (err: any) {
       message.error(err?.message || '导出失败');
     } finally {
@@ -195,12 +199,20 @@ const SettingsPage: React.FC = () => {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      if (!Array.isArray(data)) {
-        message.error('数据格式不正确，需要 JSON 数组');
+      // 兼容新格式（对象含 persons 和 generationChars）和旧格式（纯数组）
+      if (Array.isArray(data)) {
+        // 旧格式：纯 Person 数组
+        await api.data.import(data);
+        message.success(`成功导入 ${data.length} 条数据`);
+      } else if (data.persons && Array.isArray(data.persons)) {
+        // 新格式：包含 persons 和 generationChars
+        await api.data.import(data);
+        const extra = data.generationChars ? '（含字辈配置）' : '';
+        message.success(`成功导入 ${data.persons.length} 条数据${extra}`);
+      } else {
+        message.error('数据格式不正确，需要 JSON 数组或含 persons 字段的对象');
         return;
       }
-      await api.data.import(data);
-      message.success(`成功导入 ${data.length} 条数据`);
     } catch (err: any) {
       message.error(err?.message || '导入失败，请检查文件格式');
     } finally {
@@ -456,7 +468,7 @@ const SettingsPage: React.FC = () => {
             <Text strong>FTree 家谱管理系统</Text>
           </div>
           <div>
-            <Text type="secondary">版本：1.0.0</Text>
+            <Text type="secondary">版本：1.0.1</Text>
           </div>
           <div>
             <Text type="secondary">记录家族传承，铭刻世代印记。</Text>

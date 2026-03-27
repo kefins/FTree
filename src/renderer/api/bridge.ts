@@ -7,6 +7,7 @@ import type {
   UpdatePersonDTO,
   ListQuery,
   GenerationCharConfig,
+  ExportDataResult,
 } from '../types/person';
 
 const BASE_URL = `http://localhost:${DEFAULT_PORT}/api`;
@@ -113,13 +114,13 @@ const httpApi: FTreeAPI = {
   },
 
   data: {
-    async export(): Promise<Person[]> {
+    async export(): Promise<ExportDataResult> {
       return request('/data/export', { method: 'POST' });
     },
-    async import(data: Person[]): Promise<void> {
+    async import(data: Person[] | ExportDataResult): Promise<void> {
       await request('/data/import', {
         method: 'POST',
-        body: JSON.stringify({ index: data.map(p => ({ id: p.id, name: p.name, gender: p.gender, generation: p.generation, parentId: p.parentId, sortOrder: p.sortOrder })), persons: data }),
+        body: JSON.stringify(data),
       });
     },
     async backup(): Promise<string> {
@@ -239,11 +240,8 @@ function wrapIpcApi(ipcApi: any): FTreeAPI {
         if (res?.success === false) throw new Error(res.error);
         return res?.data || res;
       },
-      async import(data: Person[]) {
-        const res = await ipcApi.data.import({
-          index: data.map(p => ({ id: p.id, name: p.name, gender: p.gender, generation: p.generation, parentId: p.parentId, sortOrder: p.sortOrder })),
-          persons: data,
-        });
+      async import(data: Person[] | ExportDataResult) {
+        const res = await ipcApi.data.import(data);
         if (res?.success === false) throw new Error(res.error);
       },
       async backup() {

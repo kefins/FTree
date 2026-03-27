@@ -232,8 +232,13 @@ export function useTreeData() {
   /** 是否已完成首次加载 */
   const initializedRef = useRef(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (silent = false) => {
+    // silent=true 时不设置 loading 状态（用于编辑/添加/删除后的增量刷新，
+    // 避免 loading=true 导致 TreePage 卸载 FamilyTree 组件，
+    // 从而丢失 D3 zoom/pan 状态，引起视图跳转）。
+    if (!silent) {
+      setLoading(true);
+    }
     try {
       const data = await api.tree.getData();
       setRawData(data);
@@ -264,13 +269,15 @@ export function useTreeData() {
         setExpandedIds((prev) => {
           const next = new Set(prev);
           // 清理已不存在的占位节点 ID（旧的占位节点可能已经被新的替代）
+          let changed = false;
           for (const id of prev) {
             if (id.startsWith('__placeholder__') && !placeholderIdSet.has(id)) {
               next.delete(id);
+              changed = true;
             }
           }
-          // 不再无条件添加占位节点——占位节点保持用户手动设定的状态
-          return next;
+          // 如果没有任何改变，返回原引用以避免不必要的重渲染
+          return changed ? next : prev;
         });
       }
     } catch {
@@ -278,7 +285,9 @@ export function useTreeData() {
       setTreeData([]);
       setRawData([]);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -446,8 +455,12 @@ export function useTreeData() {
         return next;
       });
     }
-    await fetchData();
+    // 使用 silent 模式刷新，避免 loading 状态导致 FamilyTree 卸载重建
+    await fetchData(true);
   }, [fetchData]);
+
+  /** 静默刷新数据（不设置 loading 状态，用于编辑/删除后的增量刷新） */
+  const silentRefresh = useCallback(() => fetchData(true), [fetchData]);
 
   return {
     treeData,
@@ -471,6 +484,7 @@ export function useTreeData() {
     selectNode,
     clearSelection,
     refresh: fetchData,
+    silentRefresh,
     refreshAndExpand,
   };
 }

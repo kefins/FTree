@@ -76,6 +76,14 @@ export interface GenerationCharConfig {
   characters: Record<number, string>;
 }
 
+/** 导出数据结构（包含人员数据 + 字辈配置） */
+export interface ExportDataResult {
+  version: string;
+  exportedAt: string;
+  persons: Person[];
+  generationChars?: GenerationCharConfig;
+}
+
 export interface FTreeAPI {
   auth: {
     setup(password: string): Promise<void>;
@@ -95,8 +103,8 @@ export interface FTreeAPI {
     reorderChildren(parentId: string, orderedIds: string[]): Promise<void>;
   };
   data: {
-    export(): Promise<Person[]>;
-    import(data: Person[]): Promise<void>;
+    export(): Promise<ExportDataResult>;
+    import(data: Person[] | ExportDataResult): Promise<void>;
     backup(): Promise<string>;
     clear(): Promise<void>;
   };
