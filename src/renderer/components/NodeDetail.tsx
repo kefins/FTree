@@ -31,6 +31,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '../api/bridge';
 import type { Person, PersonIndex, TreeNode, CreatePersonDTO, UpdatePersonDTO } from '../types/person';
+import DeleteConfirmDialog from './DeleteConfirmDialog';
 import { getColorForGeneration } from '../utils/generationColors';
 import { getBirthOrderInfo, getNextSortOrder, getGenderedOrderLabel, getUnifiedOrderLabel } from '../utils/birthOrder';
 
@@ -105,6 +106,8 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
   const [childForm] = Form.useForm();
   const [childrenList, setChildrenList] = useState<PersonIndex[]>([]);
   const [childrenLoading, setChildrenLoading] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // 父节点名称
   const [parentName, setParentName] = useState<string | null>(null);
@@ -331,24 +334,26 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
     }
   };
 
-  // 删除当前成员
+  // 删除当前成员 —— 打开增强型删除确认对话框
   const handleDelete = () => {
     if (!person || !onDelete) return;
-    Modal.confirm({
-      title: '确认删除',
-      icon: <ExclamationCircleOutlined />,
-      content: `确定要删除「${person.name}」吗？此操作不可恢复。`,
-      okText: '删除',
-      okType: 'danger',
-      cancelText: '取消',
-      async onOk() {
-        const success = await onDelete(person.id);
-        if (success) {
-          onClose();
-          onRefresh?.();
-        }
-      },
-    });
+    setDeleteDialogVisible(true);
+  };
+
+  // 删除确认后执行
+  const handleConfirmDelete = async (id: string) => {
+    if (!onDelete) return;
+    setDeleting(true);
+    try {
+      const success = await onDelete(id);
+      if (success) {
+        setDeleteDialogVisible(false);
+        onClose();
+        onRefresh?.();
+      }
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // 查看子女列表
@@ -1089,6 +1094,15 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
       ) : (
         <div className="text-center text-gray-400 mt-12">未找到成员信息</div>
       )}
+
+      {/* 增强型删除确认对话框 */}
+      <DeleteConfirmDialog
+        person={person}
+        visible={deleteDialogVisible}
+        onCancel={() => setDeleteDialogVisible(false)}
+        onConfirm={handleConfirmDelete}
+        loading={deleting}
+      />
     </Drawer>
   );
 };

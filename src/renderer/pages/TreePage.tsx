@@ -13,6 +13,7 @@ import FamilyTree from '../components/FamilyTree';
 import type { LinkStyle } from '../components/FamilyTree';
 import TreeToolbar from '../components/TreeToolbar';
 import NodeDetail from '../components/NodeDetail';
+import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
 import ExportDialog from '../components/ExportDialog';
 import GenerationColorConfig from '../components/GenerationColorConfig';
 import PrintDialog from '../components/PrintDialog';
@@ -89,6 +90,11 @@ const TreePage: React.FC = () => {
   }>({ visible: false, x: 0, y: 0, nodeId: '' });
   /** 右键菜单打开时要进入的初始模式 */
   const [openDetailMode, setOpenDetailMode] = useState<'detail' | 'edit' | 'addChild' | null>(null);
+
+  // 右键菜单"删除成员"相关状态
+  const [deleteTarget, setDeleteTarget] = useState<Person | null>(null);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // 加载完整人员详细数据（用于节点上的"字/号"显示、导出图片等）
   // rawData 变化说明树数据已刷新，需要同步更新 personDetailMap
@@ -212,6 +218,41 @@ const TreePage: React.FC = () => {
       return await remove(id);
     },
     [remove],
+  );
+
+  // 右键菜单"删除成员"：先获取完整 person 信息再打开对话框
+  const handleContextMenuDelete = useCallback(
+    async (nodeId: string) => {
+      try {
+        const p = await api.person.get(nodeId);
+        if (p) {
+          setDeleteTarget(p);
+          setDeleteDialogVisible(true);
+        }
+      } catch {
+        message.error('获取成员信息失败');
+      }
+    },
+    [],
+  );
+
+  // 右键菜单删除确认
+  const handleConfirmDeleteFromMenu = useCallback(
+    async (id: string) => {
+      setDeleting(true);
+      try {
+        const success = await remove(id);
+        if (success) {
+          setDeleteDialogVisible(false);
+          setDeleteTarget(null);
+          clearSelection();
+          silentRefresh();
+        }
+      } finally {
+        setDeleting(false);
+      }
+    },
+    [remove, clearSelection, silentRefresh],
   );
 
   if (loading) {
@@ -376,6 +417,24 @@ const TreePage: React.FC = () => {
             <NodeExpandOutlined style={{ color: '#13c2c2' }} />
             <span>展开所有后代</span>
           </div>
+          {permissions.canDelete && (
+            <>
+              <div style={{ height: 1, background: '#f0f0f0', margin: '4px 0' }} />
+              <div
+                style={{ padding: '7px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#ff4d4f' }}
+                className="context-menu-item"
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#fff1f0')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                onClick={() => {
+                  handleContextMenuDelete(contextMenu.nodeId);
+                  setContextMenu((prev) => ({ ...prev, visible: false }));
+                }}
+              >
+                <DeleteOutlined style={{ color: '#ff4d4f' }} />
+                <span>删除成员</span>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -425,6 +484,18 @@ const TreePage: React.FC = () => {
         rawData={rawData}
         personDetailMap={personDetailMap}
         selectedId={selectedId}
+      />
+
+      {/* 右键菜单删除确认对话框 */}
+      <DeleteConfirmDialog
+        person={deleteTarget}
+        visible={deleteDialogVisible}
+        onCancel={() => {
+          setDeleteDialogVisible(false);
+          setDeleteTarget(null);
+        }}
+        onConfirm={handleConfirmDeleteFromMenu}
+        loading={deleting}
       />
     </div>
   );
