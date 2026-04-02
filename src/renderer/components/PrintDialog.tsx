@@ -1167,12 +1167,15 @@ body {
       <div class="record-name-line">
         <span class="record-name">${escapeXml(person.name)}</span>
         <span class="record-tag ${person.gender}">${person.gender === 'male' ? '男' : '女'}</span>`;
+            if (detail?.alias) html += `\n        <span class="record-alias">别名：${escapeXml(detail.alias)}</span>`;
             if (detail?.courtesy) html += `\n        <span class="record-courtesy">字 ${escapeXml(detail.courtesy)}</span>`;
             if (parentNode) html += `\n        <span class="record-parent">父：${escapeXml(parentNode.name)}</span>`;
             html += `\n      </div>`;
 
             if (includeDetail && detail) {
               html += `\n      <div class="record-detail">`;
+              if (detail.alias) html += `<div class="dl"><span class="dl-label">别名：</span>${escapeXml(detail.alias)}</div>`;
+              if (detail.courtesy) html += `<div class="dl"><span class="dl-label">字/号：</span>${escapeXml(detail.courtesy)}</div>`;
               if (detail.birthDate) html += `<div class="dl"><span class="dl-label">生：</span>${formatDate(detail.birthDate)}</div>`;
               if (detail.deathDate) html += `<div class="dl"><span class="dl-label">殁：</span>${formatDate(detail.deathDate)}</div>`;
               if (detail.birthPlace) html += `<div class="dl"><span class="dl-label">籍：</span>${escapeXml(detail.birthPlace)}</div>`;

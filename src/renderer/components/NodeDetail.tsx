@@ -146,6 +146,7 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
                 generation: p.generation,
                 parentId: p.parentId || undefined,
                 sortOrder: p.sortOrder,
+                alias: p.alias || undefined,
                 courtesy: p.courtesy || undefined,
                 spouseName: p.spouseName || undefined,
                 spouseBirthDate: p.spouseBirthDate || undefined,
@@ -203,6 +204,7 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
       generation: person.generation,
       parentId: person.parentId || undefined,
       sortOrder: person.sortOrder,
+      alias: person.alias || undefined,
       courtesy: person.courtesy || undefined,
       spouseName: person.spouseName || undefined,
       spouseBirthDate: person.spouseBirthDate || undefined,
@@ -235,6 +237,7 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
         generation: values.generation,
         parentId: values.parentId || null,
         sortOrder: values.sortOrder ?? 0,
+        alias: values.alias || undefined,
         courtesy: values.courtesy || undefined,
         spouseName: values.spouseName || undefined,
         spouseBirthDate: values.spouseBirthDate || undefined,
@@ -300,6 +303,7 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
         spousePhone: values.spousePhone || undefined,
         spouseAddress: values.spouseAddress || undefined,
         childrenNote: values.childrenNote || undefined,
+        alias: values.alias || undefined,
         courtesy: values.courtesy || undefined,
         birthDate: values.birthDate || undefined,
         deathDate: values.deathDate || undefined,
@@ -463,6 +467,9 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
       <div>
         <div className="text-center mb-4">
           <div className="text-2xl font-serif font-bold mb-1">{person.name}</div>
+          {person.alias && (
+            <div className="text-gray-400 text-sm">别名：{person.alias}</div>
+          )}
           {person.courtesy && (
             <div className="text-gray-500">字 {person.courtesy}</div>
           )}
@@ -545,6 +552,12 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
               本人信息
             </div>
             <Descriptions column={1} size="small" labelStyle={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+              {person.alias && (
+                <Descriptions.Item label="别名">{person.alias}</Descriptions.Item>
+              )}
+              {person.courtesy && (
+                <Descriptions.Item label="字/号">{person.courtesy}</Descriptions.Item>
+              )}
               {person.birthDate && (
                 <Descriptions.Item label="出生日期">{person.birthDate}</Descriptions.Item>
               )}
@@ -564,7 +577,7 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
                 <Descriptions.Item label="现住址">{person.address}</Descriptions.Item>
               )}
             </Descriptions>
-            {!person.birthDate && !person.deathDate && !person.birthPlace && !person.occupation && !person.phone && !person.address && (
+            {!person.alias && !person.courtesy && !person.birthDate && !person.deathDate && !person.birthPlace && !person.occupation && !person.phone && !person.address && (
               <div style={{ color: '#bbb', fontSize: 12, textAlign: 'center', padding: '12px 0' }}>暂无详细信息</div>
             )}
           </div>
@@ -734,6 +747,10 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
               本人信息
             </Divider>
 
+            <Form.Item label="别名" name="alias">
+              <Input placeholder="曾用名/乳名/艺名等" maxLength={50} />
+            </Form.Item>
+
             <Form.Item label="字/号" name="courtesy">
               <Input placeholder="字或号" maxLength={50} />
             </Form.Item>
@@ -882,6 +899,10 @@ const NodeDetail: React.FC<NodeDetailProps> = ({
             <Divider orientation="left" plain style={{ fontSize: 13 }}>
               本人信息（可选）
             </Divider>
+
+            <Form.Item label="别名" name="alias">
+              <Input placeholder="曾用名/乳名/艺名等" maxLength={50} />
+            </Form.Item>
 
             <Form.Item label="字/号" name="courtesy">
               <Input placeholder="字或号" maxLength={50} />

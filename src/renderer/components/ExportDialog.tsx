@@ -87,6 +87,7 @@ interface LineageNode {
   gender: 'male' | 'female';
   generation: number;
   spouseName?: string;
+  alias?: string;
   courtesy?: string;
   children?: LineageNode[];
 }
@@ -144,6 +145,7 @@ function buildLineageTree(
       gender: p.gender,
       generation: p.generation,
       spouseName: p.spouseName,
+      alias: detail?.alias,
       courtesy: detail?.courtesy,
       children: children.length > 0 ? children.map(buildNode) : undefined,
     };
@@ -377,6 +379,25 @@ function renderLineageSvg(
           .text(displayName);
       });
 
+    // 别名（姓名下方，有 alias 时显示）
+    nodeGroup
+      .filter((d) => !!d.data.alias)
+      .append('text')
+      .attr('class', 'node-alias')
+      .attr('x', NODE_WIDTH / 2)
+      .attr('y', NODE_HEIGHT / 2 + 6)
+      .style('text-anchor', 'middle')
+      .style('dominant-baseline', 'central')
+      .style('font-size', '9px')
+      .style('pointer-events', 'none')
+      .each(function (d) {
+        const c = getNodeColor(d.data.generation, d.data.gender);
+        d3.select(this)
+          .style('fill', c.text)
+          .style('opacity', '0.45')
+          .text(`别名：${d.data.alias}`);
+      });
+
     // 字/号（姓名下方，有 courtesy 时显示）
     nodeGroup
       .filter((d) => !!d.data.courtesy)
@@ -390,6 +411,11 @@ function renderLineageSvg(
       .style('pointer-events', 'none')
       .each(function (d) {
         const c = getNodeColor(d.data.generation, d.data.gender);
+        // 如果有 alias，字号需要往下移
+        const hasAlias = !!d.data.alias;
+        if (hasAlias) {
+          d3.select(this).attr('y', NODE_HEIGHT / 2 + 17);
+        }
         d3.select(this)
           .style('fill', c.text)
           .style('opacity', '0.55')
@@ -407,10 +433,17 @@ function renderLineageSvg(
       .style('opacity', '0.55')
       .each(function (d) {
         const c = getNodeColor(d.data.generation, d.data.gender);
-        // 有字号时世数往下移
+        // 根据是否有 alias 和 courtesy，世数往下移
+        const hasAlias = !!d.data.alias;
         const hasCourtesy = !!d.data.courtesy;
-        if (hasCourtesy) {
-          d3.select(this).attr('y', NODE_HEIGHT / 2 + 20);
+        let yOffset = 14;
+        if (hasAlias && hasCourtesy) {
+          yOffset = 28;
+        } else if (hasAlias || hasCourtesy) {
+          yOffset = 21;
+        }
+        if (hasCourtesy || hasAlias) {
+          d3.select(this).attr('y', NODE_HEIGHT / 2 + yOffset);
         }
         d3.select(this)
           .style('fill', c.text)

@@ -44,6 +44,8 @@ export interface Person extends PersonIndex {
   spouseAddress?: string;
   /** 子女备注（女性成员用，简要标注子女情况） */
   childrenNote?: string;
+  /** 别名（曾用名/乳名/艺名等） */
+  alias?: string;
   courtesy?: string;
   birthDate?: string;
   deathDate?: string;

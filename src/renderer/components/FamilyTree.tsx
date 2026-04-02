@@ -75,6 +75,8 @@ interface HierarchyNode {
   _spouseAddress?: string;
   /** 子女备注（女性成员用） */
   _childrenNote?: string;
+  /** 别名（曾用名/乳名/艺名等） */
+  _alias?: string;
   /** 字/号 */
   _courtesy?: string;
 }
@@ -158,6 +160,7 @@ function filterByExpanded(
       _orderLabel: orderLabel,
       _isPlaceholder: isPlaceholder,
       // 填充详细信息
+      _alias: detail?.alias,
       _courtesy: detail?.courtesy,
       _birthDate: detail?.birthDate,
       _deathDate: detail?.deathDate,
@@ -651,6 +654,25 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         }
       });
 
+    // 别名（姓名下方，非占位节点且有 alias 时显示）
+    nodeGroup
+      .filter((d) => !d.data._isPlaceholder && !!d.data._alias)
+      .append('text')
+      .attr('class', 'node-alias')
+      .attr('x', NODE_WIDTH / 2)
+      .attr('y', nameBaseY + 14)
+      .each(function (d) {
+        const c = getNodeColor(d.data.generation, d.data.gender);
+        d3.select(this)
+          .style('fill', c.text)
+          .style('opacity', '0.45')
+          .style('font-size', '9px')
+          .style('text-anchor', 'middle')
+          .style('dominant-baseline', 'central')
+          .style('pointer-events', 'none')
+          .text(`别名：${d.data._alias}`);
+      });
+
     // 字/号（姓名下方，非占位节点且有 courtesy 时显示）
     nodeGroup
       .filter((d) => !d.data._isPlaceholder && !!d.data._courtesy)
@@ -660,6 +682,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr('y', nameBaseY + 14)
       .each(function (d) {
         const c = getNodeColor(d.data.generation, d.data.gender);
+        // 如果有 alias，字号需要往下移
+        const hasAlias = !!d.data._alias;
+        if (hasAlias) {
+          d3.select(this).attr('y', nameBaseY + 25);
+        }
         d3.select(this)
           .style('fill', c.text)
           .style('opacity', '0.55')
@@ -678,10 +705,17 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr('x', NODE_WIDTH / 2)
       .attr('y', nameBaseY + 18)
       .each(function (d) {
-        // 如果有 courtesy，排行标签需要往下移
+        // 根据是否有 alias 和 courtesy，排行标签需要往下移
+        const hasAlias = !!d.data._alias;
         const hasCourtesy = !!d.data._courtesy;
-        if (hasCourtesy) {
-          d3.select(this).attr('y', nameBaseY + 28);
+        let yOffset = 18;
+        if (hasAlias && hasCourtesy) {
+          yOffset = 38;
+        } else if (hasAlias || hasCourtesy) {
+          yOffset = 28;
+        }
+        if (hasCourtesy || hasAlias) {
+          d3.select(this).attr('y', nameBaseY + yOffset);
         }
         const c = getNodeColor(d.data.generation, d.data.gender);
         d3.select(this)

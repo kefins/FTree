@@ -176,6 +176,7 @@ const PersonForm: React.FC<PersonFormProps> = ({
       spousePhone: values.spousePhone || undefined,
       spouseAddress: values.spouseAddress || undefined,
       childrenNote: values.childrenNote || undefined,
+      alias: values.alias || undefined,
       courtesy: values.courtesy || undefined,
       birthDate: values.birthDate || undefined,
       deathDate: values.deathDate || undefined,
@@ -328,6 +329,10 @@ const PersonForm: React.FC<PersonFormProps> = ({
                 {/* 左栏：本人信息 */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#1677ff', marginBottom: 8 }}>本人信息</div>
+
+                  <Form.Item label="别名" name="alias">
+                    <Input placeholder="曾用名/乳名/艺名等" maxLength={50} />
+                  </Form.Item>
 
                   <Form.Item label="字/号" name="courtesy">
                     <Input placeholder="字或号" maxLength={50} />

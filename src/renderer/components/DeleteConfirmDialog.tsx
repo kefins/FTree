@@ -120,6 +120,11 @@ const DeleteConfirmDialog: React.FC<DeleteConfirmDialogProps> = ({
           >
             <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
               {person.name}
+              {person.alias && (
+                <span style={{ color: '#999', fontWeight: 400, fontSize: 12, marginLeft: 8 }}>
+                  别名：{person.alias}
+                </span>
+              )}
               {person.courtesy && (
                 <span style={{ color: '#888', fontWeight: 400, fontSize: 13, marginLeft: 8 }}>
                   字 {person.courtesy}
